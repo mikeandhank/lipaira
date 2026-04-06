@@ -1578,6 +1578,99 @@ def logout():
 
 
 # ============================================================================
+# DATA DELETION (GDPR/CCPA / HIPAA Right to Delete)
+# ============================================================================
+
+@app.route('/api/users/<user_id>', methods=['DELETE'])
+@require_auth
+def delete_user(user_id):
+    """
+    Delete all data for a user (GDPR Article 17 / CCPA / HIPAA right to delete).
+    
+    Requirements:
+    - Caller must be the user themselves (g.user_id == user_id) OR have admin role
+    - Deletes: users row, api_keys, user_integrations, memory_nodes,
+      billing_history, operator_audit_log entries
+    
+    Verification test:
+        # Register + verify user
+        # Call DELETE /api/users/{user_id} as that user → 200
+        # Try login with deleted user → 404
+        # Try accessing any protected endpoint with deleted key → 401
+    """
+    # Ownership check — user can only delete their own account
+    calling_user_id = g.user_id
+    
+    # Admin check — admin can delete any account
+    is_admin = getattr(g, 'is_admin', False)
+    
+    if calling_user_id != user_id and not is_admin:
+        # Log the attempted unauthorized deletion
+        try:
+            log_audit(calling_user_id, "delete_user_unauthorized", 
+                     {"target_user_id": user_id}, success=False)
+        except:
+            pass
+        return jsonify({'error': 'Forbidden — can only delete your own account'}), 403
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Verify user exists
+        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Delete in order: audit log → api keys → integrations → billing → memory → users
+        tables_order = [
+            ("operator_audit_log", "user_id"),
+            ("api_keys", "user_id"),
+            ("user_integrations", "user_id"),
+            ("billing_history", "user_id"),
+            ("memory_nodes", "user_id"),
+            ("users", "id"),
+        ]
+        
+        deleted_counts = {}
+        for table, col in tables_order:
+            # Try to delete; ignore if table doesn't exist (idempotent)
+            try:
+                cursor.execute(f"DELETE FROM {table} WHERE {col} = %s", (user_id,))
+                deleted_counts[table] = cursor.rowcount
+            except Exception as del_err:
+                # Table may not exist — continue
+                deleted_counts[table] = 0
+        
+        conn.commit()
+        conn.close()
+        
+        # Log the successful deletion
+        try:
+            log_audit(calling_user_id, "delete_user", 
+                     {"deleted_user_id": user_id, "tables": deleted_counts}, success=True)
+        except Exception:
+            pass  # Don't fail the deletion request if audit fails
+        
+        return jsonify({
+            'message': f'User {user_id} and all associated data deleted',
+            'deleted': {
+                'operator_audit_log': deleted_counts.get('operator_audit_log', 0),
+                'api_keys': deleted_counts.get('api_keys', 0),
+                'user_integrations': deleted_counts.get('user_integrations', 0),
+                'billing_history': deleted_counts.get('billing_history', 0),
+                'memory_nodes': deleted_counts.get('memory_nodes', 0),
+                'users': deleted_counts.get('users', 0),
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Delete user error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
 # ONBOARDING
 # ============================================================================
 
