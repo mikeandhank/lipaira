@@ -53,5 +53,14 @@ else
     echo "[entrypoint] No migrations directory found at $MIGRATIONS_DIR — skipping."
 fi
 
+# Admin promotion: if ADMIN_EMAIL is set, promote that user to admin (idempotent)
+if [ -n "$ADMIN_EMAIL" ] && [ -n "$DATABASE_URL" ]; then
+    echo "[entrypoint] Checking for admin promotion: $ADMIN_EMAIL"
+    PGPASSWORD=$(echo "$DATABASE_URL" | sed -E 's|.*:(.+)@.*|\1|') \
+    psql -h "$DB_HOST" -U "$(echo "$DATABASE_URL" | sed -E 's|.*://([^:]+):.*|\1|')" -d "$DB_NAME" \
+        -c "UPDATE users SET role='admin' WHERE email='$ADMIN_EMAIL';" 2>/dev/null || true
+    echo "[entrypoint] Admin promotion complete."
+fi
+
 echo "[entrypoint] Starting gunicorn..."
 exec "$@"

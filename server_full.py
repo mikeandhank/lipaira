@@ -1005,6 +1005,7 @@ def require_auth(f):
             g.user_email = row[1]
             g.user_credits = float(row[2])
             g.user_tier = row[3]
+            g.user_role = row[4] or 'user'
             
             # Check rate limit based on credit balance
             current_limit = get_rate_limit(g.user_credits)
@@ -1022,6 +1023,19 @@ def require_auth(f):
         
         return f(*args, **kwargs)
     
+    return decorated
+
+
+def require_admin(f):
+    """
+    Decorator for admin-only endpoints.
+    Requires @require_auth to be applied first.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not hasattr(g, 'user_role') or g.user_role != 'admin':
+            return jsonify({'error': 'Insufficient privileges'}), 403
+        return f(*args, **kwargs)
     return decorated
 
 
@@ -1247,23 +1261,63 @@ def login():
     if not email or not password:
         return jsonify({'error': 'Email and password required'}), 400
     
+    # Rate limit check: 5 failed attempts per email per 15 minutes
+    # Redis unavailable fallback: in-memory counter (max 10, cleared on restart)
+    login._attempt_counts = getattr(login, '_attempt_counts', {})
+    
+    try:
+        import redis
+        redis_url = os.environ.get('REDIS_URL', 'redis://lipaira-redis:6379')
+        r = redis.from_url(redis_url)
+        attempts_key = f"login_attempts:{email}"
+        attempts = r.get(attempts_key)
+        if attempts and int(attempts) >= 5:
+            ttl = r.ttl(attempts_key)
+            if ttl > 0:
+                return jsonify({'error': 'Too many login attempts. Please wait 15 minutes.'}), 429
+    except Exception as e:
+        logger.warning(f"Rate limit Redis unavailable: {e}")
+        # Fallback: in-memory counter (max 10, cleared on restart)
+        if login._attempt_counts.get(email, 0) >= 10:
+            return jsonify({'error': 'Too many login attempts. Please wait 15 minutes.'}), 429
+    
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
         cursor = conn.cursor()
         
         # Fetch user by email
         cursor.execute("""
             SELECT id, email, name, credits, subscription_tier, password_hash, 
-                   email_verified, phone_verified, is_active
+                   email_verified, phone_verified, is_active, role
             FROM users WHERE email = %s
         """, (email,))
         
         row = cursor.fetchone()
         
         if not row or not verify_password(password, row[5]):
+            # Increment failed attempt counter
+            try:
+                import redis
+                r = redis.from_url(os.environ.get('REDIS_URL', 'redis://lipaira-redis:6379'))
+                r.incr(attempts_key)
+                r.expire(attempts_key, 900)  # 15 minutes
+            except:
+                login._attempt_counts[email] = login._attempt_counts.get(email, 0) + 1
+            
             conn.close()
             return jsonify({'error': 'Invalid credentials'}), 401
+        
+        user_id, user_email, name, credits, tier, _, email_verified, phone_verified, is_active, role = row
+        role = role or 'user'
+        
+        # Clear failed attempts on successful login
+        try:
+            import redis
+            r = redis.from_url(os.environ.get('REDIS_URL', 'redis://lipaira-redis:6379'))
+            r.delete(attempts_key)
+        except:
+            if email in login._attempt_counts:
+                del login._attempt_counts[email]
         
         user_id, user_email, name, credits, tier, _, email_verified, phone_verified, is_active = row
         
@@ -1287,7 +1341,8 @@ def login():
             'email': user_email,
             'name': name,
             'credits': float(credits),
-            'subscription_tier': tier
+            'subscription_tier': tier,
+            'role': role
         }
         
         # Get or create active API key
@@ -1334,7 +1389,8 @@ def login():
         return jsonify({
             'user': user, 
             'api_key': api_key,
-            'email_verified': True
+            'email_verified': True,
+            'role': role
         })
         
     except AuditLogError:
@@ -1583,6 +1639,7 @@ def logout():
 
 @app.route('/api/users/<user_id>', methods=['DELETE'])
 @require_auth
+@require_admin
 def delete_user(user_id):
     """
     Delete all data for a user (GDPR Article 17 / CCPA / HIPAA right to delete).
