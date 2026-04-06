@@ -1,13 +1,14 @@
 name: Deploy to EC2
 
 on:
- push:
-  branches: [main]
-  paths:
-   # Application code only — not markdown, agent config, or docs
-   - 'api/**'
-   - 'server*.py'
-   - 'docker-compose.yml'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+     # Application code only — not markdown, agent config, or docs
+     - 'api/**'
+     - 'server*.py'
+     - 'docker-compose.yml'
    - 'Dockerfile'
    - 'docker-entrypoint.sh'
    - 'integrations/**'
