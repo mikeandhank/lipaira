@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS user_llm_config (
     model VARCHAR(64) DEFAULT 'gpt-4o-mini',
     quality_preference VARCHAR(16) DEFAULT 'balanced',
     auto_route BOOLEAN DEFAULT true,
+    fallback_provider TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
