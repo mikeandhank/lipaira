@@ -1319,8 +1319,6 @@ def login():
             if email in login._attempt_counts:
                 del login._attempt_counts[email]
         
-        user_id, user_email, name, credits, tier, _, email_verified, phone_verified, is_active = row
-        
         # Check if account is active
         if not is_active:
             conn.close()
@@ -1639,30 +1637,23 @@ def logout():
 
 @app.route('/api/users/<user_id>', methods=['DELETE'])
 @require_auth
-@require_admin
 def delete_user(user_id):
     """
     Delete all data for a user (GDPR Article 17 / CCPA / HIPAA right to delete).
     
-    Requirements:
-    - Caller must be the user themselves (g.user_id == user_id) OR have admin role
-    - Deletes: users row, api_keys, user_integrations, memory_nodes,
+    Logic:
+    - User deletes own account → 200 (self-deletion allowed)
+    - User deletes someone else's account → 403
+    - Admin deletes any account → 200
+    
+    Deletes: users row, api_keys, user_integrations, memory_nodes,
       billing_history, operator_audit_log entries
-    
-    Verification test:
-        # Register + verify user
-        # Call DELETE /api/users/{user_id} as that user → 200
-        # Try login with deleted user → 404
-        # Try accessing any protected endpoint with deleted key → 401
     """
-    # Ownership check — user can only delete their own account
     calling_user_id = g.user_id
+    calling_user_role = getattr(g, 'user_role', 'user')
     
-    # Admin check — admin can delete any account
-    is_admin = getattr(g, 'is_admin', False)
-    
-    if calling_user_id != user_id and not is_admin:
-        # Log the attempted unauthorized deletion
+    # Self-deletion allowed; admin can delete any; otherwise 403
+    if calling_user_id != user_id and calling_user_role != 'admin':
         try:
             log_audit(calling_user_id, "delete_user_unauthorized", 
                      {"target_user_id": user_id}, success=False)
