@@ -1,0 +1,81 @@
+/* global.css - Reset + variables only */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #0a0a0f;
+  --card: #12121a;
+  --border: #1a1a2e;
+  --input-bg: #0a0a0f;
+  --input-border: #2a2a3e;
+  --text: #e0e0e0;
+  --text-muted: #666;
+  --primary: linear-gradient(135deg, #6366f1, #a855f7);
+  --error: #ef4444;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+input, button, textarea {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Typing indicator animation */
+.typing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #888;
+  margin: 0 2px;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Markdown code blocks */
+pre {
+  background: #F5F5F5;
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+code {
+  font-family: 'Monaco', 'Menlo', 'monospace';
+  font-size: 13px;
+}
+
+p code {
+  background: #F5F5F5;
+  padding: 2px 6px;
+  border-radius: 4px;
+}

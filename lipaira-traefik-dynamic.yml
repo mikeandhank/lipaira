@@ -1,0 +1,28 @@
+# Dynamic Traefik Configuration for Lipaira
+http:
+  routers:
+    lipaira:
+      rule: "Host(`lipaira.ai`) || Host(`www.lipaira.ai`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: lipaira-api
+
+    lipaira-api:
+      rule: "Host(`lipaira.ai`) && PathPrefix(`/api`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: lipaira-api
+
+  services:
+    lipaira-api:
+      loadBalancer:
+        servers:
+          - url: "http://lipaira-api:8080"
+    api@internal:
+      loadBalancer:
+        servers:
+          - url: "http://lipaira-api:8080"

@@ -1,0 +1,13 @@
+{
+  "failures": [
+    {
+      "timestamp": "2026-03-14T18:19:24Z",
+      "operation": "API key management",
+      "what": "Hardcoded Resend API key in subscribe.js",
+      "why": "Put API key directly in code instead of env var",
+      "how_to_avoid": "Always use environment variables - create .env.example as template"
+    }
+  ],
+  "lastUpdated": "2026-03-14T18:19:24Z",
+  "version": "1.0"
+}

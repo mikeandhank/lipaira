@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat - Lipaira</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a0f; color: #e4e4e7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; height: 100vh; display: flex; flex-direction: column; }
+        .header { padding: 16px 24px; border-bottom: 1px solid #27272a; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 18px; font-weight: 600; }
+        .header h1 span { color: #6366f1; }
+        .btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+        .btn-small { padding: 6px 12px; font-size: 12px; }
+        .btn-outline { background: transparent; border: 1px solid #27272a; color: #a1a1aa; }
+        .chat-container { flex: 1; display: flex; flex-direction: column; max-width: 800px; margin: 0 auto; width: 100%; padding: 20px; }
+        .messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-bottom: 20px; }
+        .message { padding: 16px; border-radius: 12px; max-width: 80%; }
+        .message.user { background: #1e1e2e; align-self: flex-end; }
+        .message.assistant { background: #141419; align-self: flex-start; border: 1px solid #27272a; }
+        .message .role { font-size: 11px; color: #71717a; margin-bottom: 6px; text-transform: uppercase; }
+        .message .text { line-height: 1.6; }
+        .input-area { display: flex; gap: 12px; padding: 16px; border-top: 1px solid #27272a; }
+        .input-area input { flex: 1; padding: 14px 16px; background: #141419; border: 1px solid #27272a; border-radius: 8px; color: #fff; font-size: 14px; }
+        .input-area input:focus { outline: none; border-color: #6366f1; }
+        .input-area .btn { background: #6366f1; color: #fff; }
+        .toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 1000; }
+        .toast.success { background: #14532d; color: #86efac; }
+        .toast.error { background: #7f1d1d; color: #fca5a5; }
+        .toast.loading { background: #1e1b4b; color: #a5b4fc; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Lipaira <span>Chat</span></h1>
+        <button class="btn btn-small btn-outline" onclick="window.location.href='/'">Dashboard</button>
+    </div>
+    
+    <div class="chat-container">
+        <div class="messages" id="messages">
+            <div class="message assistant">
+                <div class="role">Lipaira</div>
+                <div class="text">Hello! Your agent is ready. Send a message to start chatting.</div>
+            </div>
+        </div>
+        
+        <div class="input-area">
+            <input type="text" id="chat-input" placeholder="Type your message..." onkeypress="if(event.key==='Enter')sendMessage()">
+            <button class="btn" onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast" style="display:none;"></div>
+    
+    <script>
+        const apiKey = localStorage.getItem('nexus_api_key') || '';
+        
+        function showToast(text, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = text;
+            toast.className = 'toast ' + type;
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 3000);
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            // Add user message
+            addMessage('user', message);
+            input.value = '';
+            
+            // Show loading
+            showToast('Getting response...', 'loading');
+            
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Nexus-Key': apiKey
+                    },
+                    body: JSON.stringify({ message })
+                });
+                
+                const data = await res.json();
+                
+                if (data.error) {
+                    showToast(data.error, 'error');
+                    addMessage('assistant', 'Error: ' + data.error);
+                } else {
+                    showToast('Response received', 'success');
+                    addMessage('assistant', data.reply || data.content || 'No response');
+                }
+            } catch(e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+        
+        function addMessage(role, text) {
+            const container = document.getElementById('messages');
+            const div = document.createElement('div');
+            div.className = 'message ' + role;
+            div.innerHTML = '<div class="role">' + role + '</div><div class="text">' + text + '</div>';
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        // Check auth
+        if (!apiKey) {
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

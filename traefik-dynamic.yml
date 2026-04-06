@@ -1,0 +1,18 @@
+http:
+  routers:
+    lipaira-web:
+      rule: "Host(`lipaira.ai`)"
+      service: lipaira-web
+    lipaira-api:
+      rule: "Host(`api.lipaira.ai`)"
+      service: lipaira-api
+
+  services:
+    lipaira-web:
+      loadBalancer:
+        servers:
+          - url: "http://lipaira-web:80"
+    lipaira-api:
+      loadBalancer:
+        servers:
+          - url: "http://lipaira-api:8080"

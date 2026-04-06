@@ -1,0 +1,53 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "python3",
+      "args": ["/nexus/tools/mcp-filesystem/server.py"],
+      "env": {
+        "ROOTS": "/data/.openclaw/workspace,/tmp/nexus-sandbox"
+      }
+    },
+    "process": {
+      "command": "python3",
+      "args": ["/nexus/tools/mcp-process/server.py"],
+      "env": {
+        "ALLOWED_COMMANDS": "git,curl,wget,npm,node,python3,bash,sqlite3"
+      }
+    },
+    "http": {
+      "command": "python3",
+      "args": ["/nexus/tools/mcp-http/server.py"],
+      "env": {}
+    },
+    "browser": {
+      "command": "node",
+      "args": ["/nexus/tools/mcp-browser/server.js"],
+      "env": {}
+    },
+    "database": {
+      "command": "python3",
+      "args": ["/nexus/tools/mcp-database/server.py"],
+      "env": {
+        "ALLOWED_TABLES": "*"
+      }
+    },
+    "messaging": {
+      "command": "node",
+      "args": ["/nexus/tools/mcp-messaging/server.js"],
+      "env": {}
+    },
+    "cron": {
+      "command": "python3",
+      "args": ["/nexus/tools/mcp-cron/server.py"],
+      "env": {}
+    },
+    "memory": {
+      "command": "node",
+      "args": ["/nexus/tools/mcp-memory/server.js"],
+      "env": {
+        "LANCEDB_PATH": "/nexus/memory/episodic",
+        "SQLITE_PATH": "/nexus/memory/semantic/knowledge.db"
+      }
+    }
+  }
+}

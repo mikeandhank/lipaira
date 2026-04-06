@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+ * { margin: 0; padding: 0; box-sizing: border-box; }
+ body { font-family: Georgia, 'Times New Roman', serif; font-size: 13px;
+ color: #222; padding: 64px; line-height: 1.8; }
+ h1 { font-size: 20px; font-weight: 700; text-align: center;
+ margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+ .subtitle { text-align: center; font-size: 12px; color: #555;
+ margin-bottom: 48px; }
+ .parties { background: #f9f9f9; border: 1px solid #ddd; padding: 20px 24px;
+ margin-bottom: 32px; font-size: 12px; line-height: 1.8; }
+ .parties strong { font-size: 13px; }
+ h2 { font-size: 13px; font-weight: 700; text-transform: uppercase;
+ letter-spacing: 0.5px; margin: 28px 0 10px; border-bottom: 1px solid #ddd;
+ padding-bottom: 6px; }
+ p { margin-bottom: 12px; font-size: 13px; }
+ .signature-block { margin-top: 64px; display: flex;
+ justify-content: space-between; gap: 48px; }
+ .sig { flex: 1; }
+ .sig-label { font-size: 11px; color: #888; text-transform: uppercase;
+ letter-spacing: 0.5px; margin-bottom: 48px; }
+ .sig-line { border-top: 1px solid #333; padding-top: 8px;
+ font-size: 12px; color: #555; }
+ .highlight { background: #fffbeb; border-left: 3px solid #d97706;
+ padding: 12px 16px; margin: 16px 0; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Service Agreement</h1>
+<div class="subtitle">{{ business_name }} — {{ issue_date }}</div>
+
+<div class="parties">
+ <strong>Service Provider:</strong> {{ business_name }}<br>
+ {{ business_email }}{% if business_phone %} · {{ business_phone }}{% endif %}<br>
+ {% if business_address %}{{ business_address }}<br>{% endif %}
+ <br>
+ <strong>Client:</strong> {{ client_name }}<br>
+ {% if client_email %}{{ client_email }}<br>{% endif %}
+ {% if client_company %}{{ client_company }}<br>{% endif %}
+ {% if client_address %}{{ client_address }}{% endif %}
+</div>
+
+<h2>1. Services</h2>
+<p>{{ business_name }} ("Service Provider") agrees to provide the following services to {{ client_name }} ("Client"):</p>
+<p>{{ services_description }}</p>
+
+{% if deliverables %}
+
+<h2>2. Deliverables</h2>
+<p>{{ deliverables }}</p>
+{% endif %}
+
+<h2>{{ "3" if deliverables else "2" }}. Timeline</h2>
+<p>
+ <strong>Start Date:</strong> {{ start_date }}<br>
+ {% if end_date %}<strong>Completion Date:</strong> {{ end_date }}<br>{% endif %}
+ {% if milestones %}{{ milestones }}{% endif %}
+</p>
+
+<h2>{{ "4" if deliverables else "3" }}. Compensation</h2>
+<p>{{ payment_terms }}</p>
+
+{% if late_payment %}
+
+<div class="highlight">Late payments are subject to {{ late_payment }}</div>
+{% endif %}
+
+<h2>{{ "5" if deliverables else "4" }}. Confidentiality</h2>
+<p>Both parties agree to keep confidential any proprietary information, trade secrets, or sensitive business data shared during the course of this engagement.</p>
+
+<h2>{{ "6" if deliverables else "5" }}. Intellectual Property</h2>
+<p>{{ ip_terms | default("Upon receipt of full payment, all work product created specifically for Client under this agreement shall become the property of Client. Service Provider retains the right to use the work for portfolio purposes unless otherwise agreed in writing.") }}</p>
+
+<h2>{{ "7" if deliverables else "6" }}. Termination</h2>
+<p>{{ termination_terms | default("Either party may terminate this agreement with 14 days written notice. Client is responsible for payment of all work completed up to the termination date.") }}</p>
+
+<h2>{{ "8" if deliverables else "7" }}. Limitation of Liability</h2>
+<p>Service Provider's total liability shall not exceed the total fees paid under this agreement. Neither party shall be liable for indirect, incidental, or consequential damages.</p>
+
+{% if additional_terms %}
+
+<h2>Additional Terms</h2>
+<p>{{ additional_terms }}</p>
+{% endif %}
+
+<h2>Agreement</h2>
+<p>By signing below, both parties agree to the terms of this Service Agreement.</p>
+
+<div class="signature-block">
+ <div class="sig"><div class="sig-label">Service Provider</div>
+ <div class="sig-line">
+ {{ business_name }}<br>
+ Date: _______________
+ </div>
+ </div>
+ <div class="sig">
+ <div class="sig-label">Client</div>
+ <div class="sig-line">
+ {{ client_name }}<br>
+ Date: _______________
+ </div>
+ </div>
+</div>
+
+</body>
+</html>

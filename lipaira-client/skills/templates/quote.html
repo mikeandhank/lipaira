@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+ * { margin: 0; padding: 0; box-sizing: border-box; }
+ body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px;
+ color: #222; padding: 48px; }
+ .header { display: flex; justify-content: space-between;
+ align-items: flex-start; margin-bottom: 48px; }
+ .business-name { font-size: 24px; font-weight: 700; color: #111; }
+ .business-info { font-size: 12px; color: #555; margin-top: 6px; line-height: 1.6; }
+ .quote-meta { text-align: right; }
+ .quote-label { font-size: 32px; font-weight: 700; color: #111; letter-spacing: -1px; }
+ .quote-number { font-size: 13px; color: #555; margin-top: 4px; }
+ .quote-dates { font-size: 12px; color: #555; margin-top: 4px; line-height: 1.6; }
+ .section { margin-bottom: 32px; }
+ .section-label { font-size: 11px; font-weight: 600; color: #888;
+ text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+ .client-name { font-size: 15px; font-weight: 600; color: #111; }
+ .client-details { font-size: 12px; color: #555; line-height: 1.6; margin-top: 4px; }
+ .scope { background: #f9f9f9; border-left: 3px solid #111; padding: 16px 20px;
+ font-size: 13px; line-height: 1.7; color: #333; margin-bottom: 32px; }
+ table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
+ thead tr { border-bottom: 2px solid #111; }
+ th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600;
+ text-transform: uppercase; letter-spacing: 0.5px; color: #555; }
+ th.right { text-align: right; }
+ td { padding: 12px 12px; font-size: 13px; border-bottom: 1px solid #eee; }
+ td.right { text-align: right; }
+ .totals { display: flex; justify-content: flex-end; margin-bottom: 40px; }
+ .totals-table { width: 280px; }
+ .totals-table tr td { border: none; padding: 5px 12px; }
+ .totals-table tr td:last-child { text-align: right; font-weight: 500; }
+ .totals-table .total-row td { border-top: 2px solid #111;
+ font-size: 15px; font-weight: 700; padding-top: 12px; }
+ .validity { font-size: 12px; color: #888; text-align: center;
+ margin-bottom: 32px; font-style: italic; }
+ .cta { text-align: center; margin-bottom: 40px; }
+ .cta-text { font-size: 14px; color: #333; margin-bottom: 8px; }
+ .footer { border-top: 1px solid #eee; padding-top: 24px;
+ font-size: 12px; color: #888; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="header">
+ <div>
+ <div class="business-name">{{ business_name }}</div>
+ <div class="business-info">
+ {{ business_email }}<br>
+ {% if business_phone %}{{ business_phone }}<br>{% endif %}
+ {% if business_address %}{{ business_address }}{% endif %}
+ </div>
+ </div>
+ <div class="quote-meta">
+ <div class="quote-label">Quote</div>
+ <div class="quote-number">#{{ quote_number }}</div>
+ <div class="quote-dates">
+ Prepared: {{ issue_date }}<br>
+ Valid until: {{ valid_until }}
+ </div>
+ </div>
+</div>
+
+<div class="section">
+ <div class="section-label">Prepared For</div>
+ <div class="client-name">{{ client_name }}</div>
+ <div class="client-details">
+ {% if client_email %}{{ client_email }}<br>{% endif %}
+ {% if client_company %}{{ client_company }}{% endif %}
+ </div>
+</div>
+
+{% if scope %}
+
+<div class="section">
+ <div class="section-label">Scope of Work</div>
+ <div class="scope">{{ scope }}</div>
+</div>
+{% endif %}
+
+<table>
+ <thead>
+ <tr>
+ <th style="width:55%">Service</th>
+ <th class="right" style="width:15%">Qty</th>
+ <th class="right" style="width:15%">Rate</th>
+ <th class="right" style="width:15%">Total</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for item in line_items %}
+ <tr>
+ <td>{{ item.description }}</td>
+ <td class="right">{{ item.quantity }}</td>
+ <td class="right">${{ "%.2f"|format(item.rate) }}</td>
+ <td class="right">${{ "%.2f"|format(item.amount) }}</td>
+ </tr>
+ {% endfor %}
+ </tbody>
+</table>
+
+<div class="totals">
+ <table class="totals-table"><tr><td style="color:#555">Subtotal</td><td>${{ "%.2f"|format(subtotal) }}</td></tr>
+ {% if tax_rate %}
+ <tr><td style="color:#555">Tax ({{ tax_rate }}%)</td>
+ <td>${{ "%.2f"|format(tax_amount) }}</td></tr>
+ {% endif %}
+ <tr class="total-row">
+ <td>Total</td>
+ <td>${{ "%.2f"|format(total) }}</td>
+ </tr>
+ </table>
+</div>
+
+<div class="validity">This quote is valid for {{ validity_days|default(30) }} days.</div>
+
+{% if terms %}
+
+<div class="footer">
+ <strong>Terms & Conditions:</strong><br>{{ terms }}
+</div>
+{% endif %}
+
+{% if notes %}
+
+<div class="footer" style="margin-top:16px">
+ <strong>Notes:</strong><br>{{ notes }}
+</div>
+{% endif %}
+
+</body>
+</html>

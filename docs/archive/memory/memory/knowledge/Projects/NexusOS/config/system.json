@@ -1,0 +1,48 @@
+{
+  "hostname": "nexusos",
+  "version": "0.1.0",
+  "timezone": "America/New_York",
+  "autonomy": {
+    "heartbeat": {
+      "enabled": true,
+      "intervalMinutes": 30
+    },
+    "proactive": {
+      "enabled": true,
+      "behaviors": [
+        "memory_consolidation",
+        "opportunity_scan",
+        "competitor_watch"
+      ]
+    },
+    "selfImprovement": {
+      "enabled": false,
+      "allowPromptUpdates": false,
+      "allowMemoryEdits": true
+    }
+  },
+  "security": {
+    "sandboxEnabled": true,
+    "auditLogging": true,
+    "rateLimitEnabled": true,
+    "toolPermissions": {
+      "fileRead": true,
+      "fileWrite": true,
+      "commandExec": "ask",
+      "networkAccess": true,
+      "externalMessages": "ask"
+    }
+  },
+  "startup": {
+    "waitForServices": true,
+    "timeoutSeconds": 60,
+    "services": ["memory", "filesystem", "process", "http"]
+  },
+  "logging": {
+    "level": "info",
+    "output": "/nexus/logs",
+    "rotate": true,
+    "maxSize": "10M",
+    "maxFiles": 5
+  }
+}

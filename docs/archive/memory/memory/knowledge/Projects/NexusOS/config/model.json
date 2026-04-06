@@ -1,0 +1,31 @@
+{
+  "primary": {
+    "provider": "openrouter",
+    "model": "openrouter/minimax/minimax-m2.5",
+    "temperature": 0.7,
+    "maxTokens": 4096
+  },
+  "fallback": [
+    {
+      "provider": "openrouter",
+      "model": "anthropic/claude-3.5-sonnet",
+      "temperature": 0.7,
+      "maxTokens": 4096
+    },
+    {
+      "provider": "openrouter",
+      "model": "openai/gpt-4o-mini",
+      "temperature": 0.7,
+      "maxTokens": 4096
+    }
+  ],
+  "embeddings": {
+    "model": "text-embedding-3-small",
+    "dimensions": 1536
+  },
+  "reasoning": {
+    "enabled": false,
+    "provider": null,
+    "model": null
+  }
+}

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+ * { margin: 0; padding: 0; box-sizing: border-box; }
+ body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px;
+ color: #222; padding: 48px; }
+ .header { display: flex; justify-content: space-between;
+ align-items: flex-start; margin-bottom: 48px; }
+ .business-name { font-size: 24px; font-weight: 700; color: #111; }
+ .business-info { font-size: 12px; color: #555; margin-top: 6px;
+ line-height: 1.6; }
+ .invoice-meta { text-align: right; }
+ .invoice-label { font-size: 32px; font-weight: 700; color: #111;
+ letter-spacing: -1px; }
+ .invoice-number { font-size: 13px; color: #555; margin-top: 4px; }
+ .invoice-dates { font-size: 12px; color: #555; margin-top: 4px;
+ line-height: 1.6; }
+ .bill-to { margin-bottom: 40px; }
+ .bill-to-label { font-size: 11px; font-weight: 600; color: #888;
+ text-transform: uppercase; letter-spacing: 0.5px;
+ margin-bottom: 8px; }
+ .bill-to-name { font-size: 15px; font-weight: 600; color: #111; }
+ .bill-to-details { font-size: 12px; color: #555; line-height: 1.6;
+ margin-top: 4px; }
+ table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
+ thead tr { border-bottom: 2px solid #111; }
+ th { padding: 10px 12px; text-align: left; font-size: 11px;
+ font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+ color: #555; }
+ th.right { text-align: right; }
+ td { padding: 12px 12px; font-size: 13px; border-bottom: 1px solid #eee; }
+ td.right { text-align: right; }
+ td.desc { color: #555; font-size: 12px; padding-top: 2px; padding-bottom: 12px;
+ border-bottom: none; }
+ .totals { display: flex; justify-content: flex-end; margin-bottom: 48px; }
+ .totals-table { width: 280px; }
+ .totals-table tr td { border: none; padding: 5px 12px; }
+ .totals-table tr td:last-child { text-align: right; font-weight: 500; }
+ .totals-table .total-row td { border-top: 2px solid #111;
+ font-size: 15px; font-weight: 700;
+ padding-top: 12px; }
+ .footer { border-top: 1px solid #eee; padding-top: 24px;
+ font-size: 12px; color: #888; line-height: 1.6; }
+ .badge { display: inline-block; background: #111; color: white;
+ font-size: 11px; font-weight: 600; padding: 4px 10px;
+ border-radius: 4px; text-transform: uppercase;
+ letter-spacing: 0.5px; margin-bottom: 32px; }
+ .badge.paid { background: #16a34a; }
+ .badge.overdue { background: #dc2626; }
+</style>
+</head>
+<body>
+
+<div class="header">
+ <div>
+ <div class="business-name">{{ business_name }}</div>
+ <div class="business-info">
+ {{ business_email }}<br>
+ {% if business_phone %}{{ business_phone }}<br>{% endif %}
+ {% if business_address %}{{ business_address }}{% endif %}
+ </div>
+ </div>
+ <div class="invoice-meta">
+ <div class="invoice-label">Invoice</div>
+ <div class="invoice-number">#{{ invoice_number }}</div>
+ <div class="invoice-dates">
+ Issued: {{ issue_date }}<br>
+ Due: {{ due_date }}
+ </div>
+ </div>
+</div>
+
+<div class="badge {{ status_class }}">{{ status }}</div>
+
+<div class="bill-to">
+ <div class="bill-to-label">Bill To</div>
+ <div class="bill-to-name">{{ client_name }}</div>
+ <div class="bill-to-details">
+ {% if client_email %}{{ client_email }}<br>{% endif %}
+ {% if client_address %}{{ client_address }}{% endif %}
+ </div>
+</div>
+
+<table>
+ <thead>
+ <tr>
+ <th style="width:50%">Description</th>
+ <th class="right" style="width:15%">Qty</th>
+ <th class="right" style="width:15%">Rate</th>
+ <th class="right" style="width:20%">Amount</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for item in line_items %}
+ <tr>
+ <td>{{ item.description }}</td>
+ <td class="right">{{ item.quantity }}</td>
+ <td class="right">${{ "%.2f"|format(item.rate) }}</td>
+ <td class="right">${{ "%.2f"|format(item.amount) }}</td>
+ </tr>{% if item.detail %}
+ <tr><td class="desc" colspan="4">{{ item.detail }}</td></tr>
+ {% endif %}
+ {% endfor %}
+ </tbody>
+</table>
+
+<div class="totals">
+ <table class="totals-table">
+ <tr>
+ <td style="color:#555">Subtotal</td>
+ <td>${{ "%.2f"|format(subtotal) }}</td>
+ </tr>
+ {% if tax_rate %}
+ <tr>
+ <td style="color:#555">Tax ({{ tax_rate }}%)</td>
+ <td>${{ "%.2f"|format(tax_amount) }}</td>
+ </tr>
+ {% endif %}
+ {% if discount %}
+ <tr>
+ <td style="color:#555">Discount</td>
+ <td>-${{ "%.2f"|format(discount) }}</td>
+ </tr>
+ {% endif %}
+ <tr class="total-row">
+ <td>Total Due</td>
+ <td>${{ "%.2f"|format(total) }}</td>
+ </tr>
+ </table>
+</div>
+
+{% if notes %}
+
+<div class="footer">
+ <strong>Notes:</strong><br>{{ notes }}
+</div>
+{% endif %}
+
+{% if payment_instructions %}
+
+<div class="footer" style="margin-top:16px">
+ <strong>Payment:</strong><br>{{ payment_instructions }}
+</div>
+{% endif %}
+
+</body>
+</html>

@@ -1,0 +1,23 @@
+"""Memory skills placeholder."""
+
+from skills.registry import BaseSkill
+
+
+class MemoryRecallSkill(BaseSkill):
+    """Recall memories from user's memory graph."""
+    name = "memory_recall"
+    description = "Query user's memory graph"
+    required_integrations = []
+    
+    def execute(self, params, user_id, business_id=None):
+        return {"results": [], "note": "Not implemented"}
+
+
+class MemoryStoreSkill(BaseSkill):
+    """Store a memory in user's graph."""
+    name = "memory_store"
+    description = "Store memory in user's graph"
+    required_integrations = []
+    
+    def execute(self, params, user_id, business_id=None):
+        return {"stored": False, "note": "Not implemented"}

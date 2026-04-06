@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  nexusos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: nexusos/agent:latest
+    container_name: nexusos
+    hostname: nexusos
+    ports:
+      - "4893:4893"  # Memory server
+      - "4894:4894"  # MCP Filesystem
+      - "4895:4895"  # MCP Process
+      - "4896:4896"  # MCP HTTP
+      - "8080:8080"  # OpenClaw Gateway
+    volumes:
+      # Persistent memory
+      - nexus_memory:/nexus/memory
+      # Workspace for agent
+      - nexus_workspace:/nexus/sandbox
+      # Configuration (mount your config here)
+      - ./config:/nexus/config:ro
+      # Logs
+      - nexus_logs:/nexus/logs
+    environment:
+      - NEXUS_ENV=production
+      - NEXUS_MEMORY_DRIVER=lancedb
+      - NEXUS_LLM_PROVIDER=openrouter
+      - NEXUS_LLM_MODEL=openrouter/minimax/minimax-m2.5
+      # Add your API keys here or use .env file
+      # - OPENROUTER_API_KEY=your_key
+      # - ANTHROPIC_API_KEY=your_key
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4893/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - nexus
+
+  # Optional: Vector database for memory
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: nexus_qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - nexus
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: nexus_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - nexus
+    command: redis-server --appendonly yes
+
+volumes:
+  nexus_memory:
+  nexus_workspace:
+  nexus_logs:
+  qdrant_storage:
+  redis_data:
+
+networks:
+  nexus:
+    driver: bridge

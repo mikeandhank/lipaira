@@ -1,0 +1,38 @@
+{
+  "tiers": {
+    "working": {
+      "type": "ram",
+      "maxTokens": 32000,
+      "autoSummarize": true,
+      "summarizeAfter": 50
+    },
+    "episodic": {
+      "type": "lancedb",
+      "path": "/nexus/memory/episodic",
+      "embeddingModel": "text-embedding-3-small",
+      "dimensions": 1536
+    },
+    "semantic": {
+      "type": "sqlite",
+      "path": "/nexus/memory/semantic/knowledge.db"
+    }
+  },
+  "retrieval": {
+    "topK": 5,
+    "minScore": 0.7,
+    "autoRecall": true,
+    "recallOnStart": true
+  },
+  "persistence": {
+    "autoSave": true,
+    "intervalSeconds": 30,
+    "consolidateOnEnd": true
+  },
+  "consolidation": {
+    "enabled": true,
+    "schedule": "0 2 * * *",
+    "extractFacts": true,
+    "extractEntities": true,
+    "updateEmbeddings": true
+  }
+}

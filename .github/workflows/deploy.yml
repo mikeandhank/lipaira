@@ -1,0 +1,117 @@
+name: Deploy to EC2
+
+on:
+ push:
+  branches: [main]
+  paths:
+   # Application code only — not markdown, agent config, or docs
+   - 'api/**'
+   - 'server*.py'
+   - 'docker-compose.yml'
+   - 'Dockerfile'
+   - 'docker-entrypoint.sh'
+   - 'integrations/**'
+   - 'lipaira-*/**'
+   - 'web/**'
+   - 'src/**'
+   - 'public/**'
+   - '.github/workflows/**'
+
+jobs:
+ deploy:
+  runs-on: ubuntu-latest
+  steps:
+   - name: Checkout code
+     uses: actions/checkout@v4
+
+   - name: Deploy via SSH
+     uses: appleboy/ssh-action@v1.0.0
+     with:
+      host: ${{ secrets.EC2_HOST }}
+      username: ${{ secrets.EC2_USER }}
+      key: ${{ secrets.EC2_SSH_KEY }}
+      script: |
+       set -e
+       cd /home/ec2-user/nexusos
+       
+       echo "Cleaning local changes..."
+       git checkout -- . 2>/dev/null || true
+       git pull origin main --force || true
+       
+       echo "Building Docker images..."
+       docker build -t lipaira-api:latest .
+       docker build -t lipaira-web:latest ./lipaira-web
+       
+       echo "Stopping old containers..."
+       docker stop lipaira-api lipaira-web traefik 2>/dev/null || true
+       docker rm lipaira-api lipaira-web traefik 2>/dev/null || true
+       
+       echo "Starting traefik via docker-compose..."
+       docker-compose up -d traefik
+       
+       echo "Waiting for traefik to initialize..."
+       sleep 5
+       
+       echo "Starting API and web containers..."
+       # Load env vars from .env (already on server)
+       set -a
+       source .env
+       set +a
+       
+       docker run -d \
+         --name lipaira-api \
+         --network nexusos_lipaira-net \
+         --restart unless-stopped \
+         -e AWS_REGION=us-east-2 \
+         -e PYTHONUNBUFFERED=1 \
+         -e DATABASE_URL="$DATABASE_URL" \
+         -e REDIS_HOST=redis \
+         -e REDIS_PORT=6379 \
+         -e REDIS_PASSWORD="$REDIS_PASSWORD" \
+         -e GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
+         -e GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET" \
+         -e GOOGLE_REDIRECT_URI="$GOOGLE_REDIRECT_URI" \
+         -e FLASK_SECRET_KEY="$FLASK_SECRET_KEY" \
+         -e INTERNAL_KEY="$INTERNAL_KEY" \
+         -e NEXUSOS_ENV="${NEXUSOS_ENV:-staging}" \
+         -l traefik.enable=true \
+         -l 'traefik.http.routers.api.rule=Host("api.lipaira.ai")' \
+         -l 'traefik.http.routers.api.entrypoints=websecure' \
+         -l 'traefik.http.routers.api.tls=true' \
+         -l 'traefik.http.routers.api.priority=10' \
+         -l 'traefik.http.routers.api-catchall.rule=PathPrefix("/")' \
+         -l 'traefik.http.routers.api-catchall.entrypoints=web' \
+         -l 'traefik.http.routers.api-catchall.priority=1' \
+         -l 'traefik.http.services.api.loadbalancer.server.port=8080' \
+         lipaira-api:latest \
+         gunicorn --bind 0.0.0.0:8080 --workers 4 --timeout 120 server_full:app
+       
+       docker run -d \
+         --name lipaira-web \
+         --network nexusos_lipaira-net \
+         --restart unless-stopped \
+         -l traefik.enable=true \
+         -l 'traefik.http.routers.web.rule=Host("lipaira.ai") || Host("www.lipaira.ai")' \
+         -l 'traefik.http.routers.web.entrypoints=web' \
+         -l 'traefik.http.routers.web.priority=5' \
+         -l 'traefik.http.services.web.loadbalancer.server.port=80' \
+         lipaira-web:latest
+       
+       echo "Waiting for containers to be healthy..."
+       sleep 10
+       
+       echo "Checking API health..."
+       for i in 1 2 3 4 5 6 7 8 9 10; do
+         HEALTH=$(curl -sf https://api.lipaira.ai/health 2>/dev/null || echo "not ready")
+         if [ "$HEALTH" != "not ready" ]; then
+           echo "API is healthy: $HEALTH"
+           break
+         fi
+         echo "Attempt $i: waiting for API..."
+         sleep 3
+       done
+       
+       echo "Verifying web frontend..."
+       curl -sf https://lipaira.ai | grep -q "<html" && echo "Frontend OK" || echo "Frontend may have issues"
+       
+       echo "Deploy complete!"

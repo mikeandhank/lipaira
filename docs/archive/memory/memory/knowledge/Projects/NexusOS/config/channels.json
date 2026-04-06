@@ -1,0 +1,52 @@
+{
+  "inbound": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "allowedUsers": ["${TELEGRAM_ALLOWED_USER}"]
+    },
+    "discord": {
+      "enabled": false,
+      "botToken": "${DISCORD_BOT_TOKEN}",
+      "guildId": "${DISCORD_GUILD_ID}",
+      "channelIds": []
+    },
+    "email": {
+      "enabled": false,
+      "host": "${IMAP_HOST}",
+      "port": 993,
+      "username": "${IMAP_USERNAME}",
+      "password": "${IMAP_PASSWORD}"
+    },
+    "webhook": {
+      "enabled": true,
+      "path": "/webhook",
+      "auth": "${WEBHOOK_AUTH}"
+    }
+  },
+  "outbound": {
+    "telegram": {
+      "enabled": true
+    },
+    "discord": {
+      "enabled": false
+    },
+    "email": {
+      "enabled": false,
+      "smtp": "${SMTP_HOST}",
+      "port": 587,
+      "username": "${SMTP_USERNAME}",
+      "password": "${SMTP_PASSWORD}"
+    },
+    "tts": {
+      "enabled": false,
+      "provider": "elevenlabs",
+      "voiceId": "${ELEVENLABS_VOICE_ID}"
+    }
+  },
+  "rateLimits": {
+    "messagesPerMinute": 20,
+    "burstSize": 5,
+    "enabled": true
+  }
+}

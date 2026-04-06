@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus AI - Pre-Trained AI Agents for Business</title>
+    <meta name="description" content="Pre-trained AI agents that work while you sleep. SDR, Support, Content, and Data agents ready to deploy in minutes.">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1a1a1a; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+        
+        /* Header */
+        header { padding: 20px 0; border-bottom: 1px solid #eee; }
+        header .container { display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 24px; font-weight: 700; color: #1a1a1a; }
+        .logo span { color: #0066ff; }
+        nav a { margin-left: 30px; color: #666; text-decoration: none; }
+        nav a:hover { color: #1a1a1a; }
+        
+        /* Hero */
+        .hero { padding: 80px 0; text-align: center; }
+        .hero h1 { font-size: 48px; font-weight: 800; margin-bottom: 20px; line-height: 1.2; }
+        .hero h1 span { color: #0066ff; }
+        .hero p { font-size: 20px; color: #666; max-width: 600px; margin: 0 auto 40px; }
+        .btn { display: inline-block; padding: 16px 32px; border-radius: 8px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
+        .btn-primary { background: #0066ff; color: white; }
+        .btn-primary:hover { background: #0052cc; }
+        .btn-secondary { background: #f5f5f5; color: #1a1a1a; margin-left: 10px; }
+        .btn-secondary:hover { background: #eee; }
+        
+        /* Social Proof */
+        .social-proof { padding: 40px 0; text-align: center; border-top: 1px solid #eee; border-bottom: 1px solid #eee; }
+        .social-proof p { color: #666; margin-bottom: 20px; }
+        .quotes { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; }
+        .quote { font-style: italic; color: #444; max-width: 300px; }
+        .quote strong { display: block; margin-top: 10px; font-style: normal; }
+        
+        /* Problem */
+        .problem { padding: 80px 0; background: #fafafa; }
+        .problem h2 { font-size: 32px; margin-bottom: 30px; text-align: center; }
+        .problem-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .problem-card { background: white; padding: 30px; border-radius: 12px; }
+        .problem-card h3 { color: #cc0000; margin-bottom: 10px; }
+        
+        /* Solution */
+        .solution { padding: 80px 0; }
+        .solution h2 { font-size: 32px; margin-bottom: 50px; text-align: center; }
+        .agents-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; }
+        .agent-card { border: 1px solid #eee; border-radius: 12px; padding: 30px; transition: all 0.2s; }
+        .agent-card:hover { border-color: #0066ff; box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
+        .agent-card h3 { font-size: 20px; margin-bottom: 10px; }
+        .agent-card .tagline { color: #666; margin-bottom: 15px; }
+        .agent-card ul { list-style: none; margin-bottom: 20px; }
+        .agent-card li { padding: 6px 0; padding-left: 20px; position: relative; }
+        .agent-card li::before { content: "✓"; position: absolute; left: 0; color: #00aa00; }
+        .agent-card .price { font-size: 28px; font-weight: 700; color: #0066ff; }
+        .agent-card .price span { font-size: 14px; color: #666; font-weight: 400; }
+        
+        /* Pricing */
+        .pricing { padding: 80px 0; background: #fafafa; }
+        .pricing h2 { font-size: 32px; margin-bottom: 20px; text-align: center; }
+        .pricing-sub { text-align: center; color: #666; margin-bottom: 40px; }
+        .pricing-grid { display: flex; justify-content: center; gap: 30px; flex-wrap: wrap; }
+        .price-card { background: white; border-radius: 12px; padding: 30px; text-align: center; min-width: 200px; }
+        .price-card.featured { border: 2px solid #0066ff; position: relative; }
+        .price-card.featured::before { content: "Most Popular"; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #0066ff; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; }
+        .price-card h3 { font-size: 18px; margin-bottom: 10px; }
+        .price-card .amount { font-size: 36px; font-weight: 800; }
+        .price-card .period { color: #666; }
+        .price-card ul { list-style: none; text-align: left; margin: 20px 0; }
+        .price-card li { padding: 8px 0; border-bottom: 1px solid #eee; }
+        
+        /* FAQ */
+        .faq { padding: 80px 0; }
+        .faq h2 { font-size: 32px; margin-bottom: 40px; text-align: center; }
+        .faq-grid { max-width: 700px; margin: 0 auto; }
+        .faq-item { margin-bottom: 20px; }
+        .faq-item h3 { font-size: 18px; margin-bottom: 10px; }
+        .faq-item p { color: #666; }
+        
+        /* CTA */
+        .cta { padding: 80px 0; background: #1a1a1a; color: white; text-align: center; }
+        .cta h2 { font-size: 36px; margin-bottom: 20px; }
+        .cta p { font-size: 18px; color: #999; margin-bottom: 30px; }
+        .cta .btn-primary { background: #0066ff; }
+        
+        /* Footer */
+        footer { padding: 40px 0; text-align: center; color: #666; border-top: 1px solid #eee; }
+        
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 32px; }
+            .problem-grid, .agents-grid { grid-template-columns: 1fr; }
+            .pricing-grid { flex-direction: column; align-items: center; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">Nexus<span>AI</span></div>
+            <nav>
+                <a href="#agents">Agents</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#faq">FAQ</a>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <h1>Build Your First<br><span>AI Employee</span> Today</h1>
+            <p>Pre-trained AI agents that work while you sleep. SDR, Support, Content, and Data agents ready to deploy in minutes.</p>
+            <a href="#pricing" class="btn btn-primary">Start Free Trial</a>
+            <a href="#agents" class="btn btn-secondary">See Agents</a>
+        </div>
+    </section>
+
+    <section class="social-proof">
+        <div class="container">
+            <p>Trusted by early adopters</p>
+            <div class="quotes">
+                <div class="quote">"Our SDR agent booked 12 demos last week - completely autonomously."<strong>— SaaS Founder</strong></div>
+                <div class="quote">"Replaced 2 contractors and saved $8k/month"<strong>— E-commerce Brand</strong></div>
+                <div class="quote">"Finally, AI that actually understands our business"<strong>— Marketing Agency</strong></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="problem" id="agents">
+        <div class="container">
+            <h2>The Problem with AI</h2>
+            <div class="problem-grid">
+                <div class="problem-card">
+                    <h3>✗ Generic</h3>
+                    <p>ChatGPT doesn't know your product, customers, or business context</p>
+                </div>
+}
