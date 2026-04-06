@@ -34,7 +34,7 @@ MICROSOFT_SCOPES = [
 
 # Redis client
 redis_client = redis.Redis(
-    host=os.environ.get('REDIS_HOST', 'redis'),
+    host=os.environ.get('REDIS_HOST', 'lipaira-redis'),
     port=int(os.environ.get('REDIS_PORT', 6379)),
     password=os.environ.get('REDIS_PASSWORD') or None,
     decode_responses=True
