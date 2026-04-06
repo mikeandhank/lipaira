@@ -33,10 +33,9 @@ def get_integration_tokens(
     """
     import psycopg2
     
-    db_url = os.environ.get(
-        'DATABASE_URL',
-        'postgresql://nexusos:ChangeMe123!@postgres:5432/nexusos'
-    )
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        raise RuntimeError('DATABASE_URL is required')
     conn = psycopg2.connect(db_url)
     
     with conn.cursor() as cur:
@@ -223,10 +222,9 @@ def _save_refreshed_token(
     new_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
     new_refresh_token = token_data.get("refresh_token")
     
-    db_url = os.environ.get(
-        'DATABASE_URL',
-        'postgresql://nexusos:ChangeMe123!@postgres:5432/nexusos'
-    )
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        raise RuntimeError('DATABASE_URL is required')
     conn = psycopg2.connect(db_url)
     
     try:

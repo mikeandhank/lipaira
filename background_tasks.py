@@ -44,7 +44,7 @@ def _run_billing_sweep_loop():
             resp = requests.post(
                 f"{base_url}/api/billing/sweep",
                 headers={
-                    'X-Internal-Key': os.environ.get('INTERNAL_KEY', 'lipaira-internal'),
+                    'X-Internal-Key': os.environ.get('INTERNAL_KEY'),
                     'Content-Type': 'application/json'
                 },
                 json={},
@@ -106,7 +106,9 @@ def _run_workflow_scheduler_loop():
             if not workflow_cache or (now.timestamp() - cache_refreshed) > CACHE_TTL:
                 import psycopg2
                 import os
-                db_url = os.environ.get('DATABASE_URL', 'postgresql://nexusos:2c27dd080c0a8f7b02dace074bd4cb77ba48cfb5@postgres:5432/nexusos')
+                db_url = os.environ.get('DATABASE_URL')
+                if not db_url:
+                    raise RuntimeError('DATABASE_URL is required')
                 conn = psycopg2.connect(db_url)
                 
                 with conn:
@@ -144,7 +146,9 @@ def _run_workflow_scheduler_loop():
                     try:
                         import psycopg2
                         import os
-                        db_url = os.environ.get('DATABASE_URL', 'postgresql://nexusos:2c27dd080c0a8f7b02dace074bd4cb77ba48cfb5@postgres:5432/nexusos')
+                        db_url = os.environ.get('DATABASE_URL')
+                        if not db_url:
+                            raise RuntimeError('DATABASE_URL is required')
                         conn = psycopg2.connect(db_url)
                         
                         # Get user API key

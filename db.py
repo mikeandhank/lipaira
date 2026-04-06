@@ -15,10 +15,9 @@ from contextlib import contextmanager
 import psycopg2
 
 CONTAINER_PREFIX = "lipaira-db-"
-SHARED_DB_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://nexusos:2c27dd080c0a8f7b02dace074bd4cb77ba48cfb5@postgres:5432/nexusos"
-)
+SHARED_DB_URL = os.environ.get("DATABASE_URL")
+if not SHARED_DB_URL:
+    raise RuntimeError("DATABASE_URL environment variable is required")
 
 
 def get_db_connection_for_user(user_id: str, tier: str):

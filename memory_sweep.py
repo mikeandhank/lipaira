@@ -122,7 +122,10 @@ def sweep_google(user_id: str) -> int:
     
     try:
         # Get Google token from DB
-        conn = psycopg2.connect(host='postgres', database='nexusos', user='nexusos', password='2c27dd080c0a8f7b02dace074bd4cb77ba48cfb5')
+        db_url = os.environ.get('DATABASE_URL')
+        if not db_url:
+            raise RuntimeError('DATABASE_URL is required')
+        conn = psycopg2.connect(db_url)
         cursor = conn.cursor()
         cursor.execute("SELECT google_access_token, google_refresh_token FROM users WHERE id = %s", (user_id,))
         row = cursor.fetchone()

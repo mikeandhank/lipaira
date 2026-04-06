@@ -67,8 +67,7 @@ class CumulativeMemoryGraph:
     
     def __init__(self, user_id: str, db_url: str = None):
         self.user_id = user_id
-        self.db_url = db_url or os.environ.get('DATABASE_URL', 
-            'postgresql://lipaira:2c27dd080c0a8f7b02dace074bd4cb77ba48cfb5@postgres:5432/nexusos')
+        self.db_url = db_url or os.environ.get('DATABASE_URL')
         
         self.nodes: Dict[str, MemoryNode] = {}
         self.edges: List[MemoryEdge] = []
