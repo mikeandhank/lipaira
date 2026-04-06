@@ -7,18 +7,18 @@ on:
   push:
     branches: [main]
     paths:
-     # Application code only — not markdown, agent config, or docs
-     - 'api/**'
-     - 'server*.py'
-     - 'docker-compose.yml'
-   - 'Dockerfile'
-   - 'docker-entrypoint.sh'
-   - 'integrations/**'
-   - 'lipaira-*/**'
-   - 'web/**'
-   - 'src/**'
-   - 'public/**'
-   - '.github/workflows/**'
+      # Application code only — not markdown, agent config, or docs
+      - 'api/**'
+      - 'server*.py'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - 'docker-entrypoint.sh'
+      - 'integrations/**'
+      - 'lipaira-*/**'
+      - 'web/**'
+      - 'src/**'
+      - 'public/**'
+      - '.github/workflows/**'
 
 jobs:
  deploy:
