@@ -144,8 +144,8 @@ def microsoft_connect():
     store_oauth_state(state, user_id)
     
     msal_app = get_msal_app()
-    # Build scopes list - include default scopes + Microsoft Graph scopes
-    scopes = ['openid', 'profile', 'offline_access'] + MICROSOFT_SCOPES
+    # Use .default scope for static consent
+    scopes = ['https://graph.microsoft.com/.default']
     auth_url = msal_app.get_authorization_request_url(
         scopes=scopes,
         state=state,
@@ -171,7 +171,7 @@ def microsoft_callback():
     msal_app = get_msal_app()
     result = msal_app.acquire_token_by_authorization_code(
         code=code,
-        scopes=MICROSOFT_SCOPES,
+        scopes=['https://graph.microsoft.com/.default'],
         redirect_uri=MICROSOFT_REDIRECT_URI
     )
 
@@ -254,7 +254,7 @@ def internal_microsoft_credentials():
     # Try silent token acquisition
     if accounts:
         result = msal_app.acquire_token_silent(
-            scopes=MICROSOFT_SCOPES,
+            scopes=['https://graph.microsoft.com/.default'],
             account=accounts[0]
         )
     
@@ -263,7 +263,7 @@ def internal_microsoft_credentials():
         if integration[4]:  # refresh_token
             result = msal_app.acquire_token_by_refresh_token(
                 refresh_token=integration[4],
-                scopes=MICROSOFT_SCOPES
+                scopes=['https://graph.microsoft.com/.default']
             )
     
     if not result or 'access_token' not in result:
