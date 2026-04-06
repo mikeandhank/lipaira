@@ -981,7 +981,7 @@ def require_auth(f):
             key_hash_part = hashlib.sha256(key_part.encode()).hexdigest()
             
             cursor.execute("""
-                SELECT ak.user_id, u.email, u.credits, u.subscription_tier
+                SELECT ak.user_id, u.email, u.credits, u.subscription_tier, u.role
                 FROM api_keys ak
                 JOIN users u ON u.id = ak.user_id
                 WHERE (ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
