@@ -117,7 +117,9 @@ def get_oauth_state(state: str) -> tuple:
 
 def get_db_connection():
     import psycopg2
-    db_url = os.environ.get('DATABASE_URL', 'postgresql://nexusos:ChangeMe123!@postgres:5432/nexusos')
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        raise RuntimeError('DATABASE_URL environment variable is required')
     return psycopg2.connect(db_url)
 
 
@@ -383,7 +385,7 @@ def google_connect():
             try:
                 # Hash the provided API key to match against key_hash
                 key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-                conn = psycopg2.connect('postgresql://nexusos:2c27dd080c0a8f7b02dace074bd4cb77ba48cfb5@postgres:5432/nexusos')
+                conn = get_db_connection()
                 cur = conn.cursor()
                 # Find user by API key hash
                 cur.execute("""

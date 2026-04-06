@@ -62,7 +62,9 @@ def get_oauth_state(state: str) -> str:
 
 def get_db_connection():
     import psycopg2
-    db_url = os.environ.get('DATABASE_URL', 'postgresql://nexusos:ChangeMe123!@postgres:5432/nexusos')
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        raise RuntimeError('DATABASE_URL environment variable is required')
     return psycopg2.connect(db_url)
 
 

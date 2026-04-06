@@ -15,7 +15,9 @@ def validate_api_key_from_key(api_key: str) -> str:
     if not api_key:
         return None
     
-    db_url = os.environ.get('DATABASE_URL', 'postgresql://nexusos:ChangeMe123!@postgres:5432/nexusos')
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        return None
     try:
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
