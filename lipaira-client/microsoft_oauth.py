@@ -144,8 +144,10 @@ def microsoft_connect():
     store_oauth_state(state, user_id)
     
     msal_app = get_msal_app()
+    # Build scopes list - include default scopes + Microsoft Graph scopes
+    scopes = ['openid', 'profile', 'offline_access'] + MICROSOFT_SCOPES
     auth_url = msal_app.get_authorization_request_url(
-        scopes=MICROSOFT_SCOPES,
+        scopes=scopes,
         state=state,
         redirect_uri=MICROSOFT_REDIRECT_URI
     )
