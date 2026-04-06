@@ -1,3 +1,4 @@
+# Repo renamed to lipaira — https://github.com/mikeandhank/lipaira
 """
 Nexus Server - Full Implementation
 Complete server with: Auth, LLM Routing, Cost/Quality Slider, Billing, Usage
