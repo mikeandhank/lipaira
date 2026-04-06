@@ -33,10 +33,15 @@ MICROSOFT_SCOPES = [
 ]
 
 # Redis client
+# For lipaira-redis (no auth), don't use password
+# For other Redis instances, use password if provided
+_redis_host = os.environ.get('REDIS_HOST', 'lipaira-redis')
+_redis_pass = None if _redis_host == 'lipaira-redis' else os.environ.get('REDIS_PASSWORD')
+
 redis_client = redis.Redis(
-    host=os.environ.get('REDIS_HOST', 'lipaira-redis'),
+    host=_redis_host,
     port=int(os.environ.get('REDIS_PORT', 6379)),
-    password=os.environ.get('REDIS_PASSWORD') or None,
+    password=_redis_pass,
     decode_responses=True
 )
 
