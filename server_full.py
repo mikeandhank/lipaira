@@ -2743,6 +2743,12 @@ def health():
     return jsonify({'status': 'ok', 'service': 'lipaira'})
 
 
+@app.route('/version', methods=['GET'])
+def version():
+    """Test endpoint for CI/CD verification."""
+    return jsonify({'version': '2026.04.07-test', 'deployed': 'success'})
+
+
 # ============================================================================
 # DASHBOARD (Static HTML)
 # ============================================================================
