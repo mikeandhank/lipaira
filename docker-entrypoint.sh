@@ -77,3 +77,41 @@ if [ -z "$VAPID_PRIVATE_KEY" ] || [ -z "$VAPID_PUBLIC_KEY" ]; then
         echo "[entrypoint] VAPID keys loaded."
     fi
 fi
+
+# Load VAPID keys from AWS Secrets Manager using boto3
+if [ -z "$VAPID_PRIVATE_KEY" ] || [ -z "$VAPID_PUBLIC_KEY" ]; then
+    echo "[entrypoint] Loading VAPID keys from ASM via boto3..."
+    VAPID_PRIVATE_KEY=$(python3 -c "
+import boto3, json, os
+try:
+    client = boto3.client('secretsmanager', region_name='us-east-1')
+    resp = client.get_secret_value(SecretId='/lipaira/vapid-private-key')
+    print(resp['SecretString'])
+except: pass
+" 2>/dev/null)
+    
+    VAPID_PUBLIC_KEY=$(python3 -c "
+import boto3, json, os
+try:
+    client = boto3.client('secretsmanager', region_name='us-east-1')
+    resp = client.get_secret_value(SecretId='/lipaira/vapid-public-key')
+    print(resp['SecretString'])
+except: pass
+" 2>/dev/null)
+    
+    VAPID_SUBJECT=$(python3 -c "
+import boto3, json, os
+try:
+    client = boto3.client('secretsmanager', region_name='us-east-1')
+    resp = client.get_secret_value(SecretId='/lipaira/vapid-subject')
+    print(resp['SecretString'])
+except: print('mailto:admin@lipaira.ai')
+" 2>/dev/null)
+    
+    if [ -n "$VAPID_PRIVATE_KEY" ]; then
+        export VAPID_PRIVATE_KEY VAPID_PUBLIC_KEY VAPID_SUBJECT
+        echo "[entrypoint] VAPID keys loaded successfully."
+    else
+        echo "[entrypoint] VAPID keys not found in ASM."
+    fi
+fi
