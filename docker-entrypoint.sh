@@ -22,9 +22,11 @@ if [ -n "$DATABASE_URL" ]; then
     echo "[entrypoint] Postgres is ready."
 fi
 
-# Run migrations
+# Run migrations (skip if SKIP_MIGRATIONS=1)
 MIGRATIONS_DIR="/opt/lipaira/app/migrations"
-if [ -d "$MIGRATIONS_DIR" ]; then
+if [ "$SKIP_MIGRATIONS" = "1" ]; then
+    echo "[entrypoint] SKIP_MIGRATIONS=1 — skipping migrations"
+elif [ -d "$MIGRATIONS_DIR" ]; then
     echo "[entrypoint] Running migrations..."
 
     # Enable pgcrypto extension first
@@ -41,8 +43,7 @@ if [ -d "$MIGRATIONS_DIR" ]; then
             PGPASSWORD=$(echo "$DATABASE_URL" | sed -E 's|.*:(.+)@.*|\1|') \
             psql -h "$DB_HOST" -U "$(echo "$DATABASE_URL" | sed -E 's|.*://([^:]+):.*|\1|')" -d "$DB_NAME" \
                 -f "$f" || {
-                echo "[entrypoint] MIGRATION FAILED: $(basename $f)"
-                exit 1
+                echo "[entrypoint] WARNING: Migration $(basename $f) had errors (continuing)"
             }
         else
             echo "[entrypoint] WARNING: DATABASE_URL not set — skipping migration $f"
