@@ -3137,8 +3137,8 @@ def chat():
     # Free tier (credits = 0): use free Google model
     # Locked decision: Gemini Flash-Lite via Google AI directly
     if user_credits <= 0:
-        provider = "google"
-        model = "gemini-2.5-flash-lite-preview-05-20"
+        provider = "openrouter"
+        model = "google/gemini-2.5-flash-lite-preview-05-20"
     else:
         # Paid tier — read from user_llm_config
         try:
