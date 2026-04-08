@@ -2925,7 +2925,7 @@ def conversation_history():
 # =============================================================================
 # LIPAIRA UNIFIED CHAT API - Multi-provider LLM endpoint with memory
 # =============================================================================
-def run_agentic_loop(user_id, messages, system_prompt, model, max_rounds=5, business_id=None):
+def run_agentic_loop(user_id, messages, system_prompt, model, provider, max_rounds=5, business_id=None):
     """Agentic loop with tool use."""
     import sys
     import os
@@ -2934,9 +2934,9 @@ def run_agentic_loop(user_id, messages, system_prompt, model, max_rounds=5, busi
     os.environ['USER_ID'] = user_id
     os.environ['GATEWAY_URL'] = 'http://localhost:8080'
     
-    # Route ALL models through OpenRouter for flexibility
-    # This allows any model OpenRouter supports
-    provider = 'openrouter'
+    # Use the provider passed from the chat endpoint, or default to openrouter
+    if not provider:
+        provider = 'openrouter'
     
     # Get tools from skill registry
     tools = []  # Initialize to avoid UnboundLocalError
@@ -3282,7 +3282,7 @@ def chat():
         }), 402
 
     # Run agentic loop with tools
-    loop_result = run_agentic_loop(user_id=user_id, messages=messages, system_prompt=system_prompt, model=model, max_rounds=5, business_id=data.get("business_id"))
+    loop_result = run_agentic_loop(user_id=user_id, messages=messages, system_prompt=system_prompt, model=model, provider=provider, max_rounds=5, business_id=data.get("business_id"))
     if not loop_result.get('success'):
         return jsonify({'error': loop_result.get('error', 'Agent error')}), 500
     content = loop_result.get('content', '')
