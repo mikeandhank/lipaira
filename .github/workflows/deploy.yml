@@ -42,7 +42,7 @@ jobs:
        git pull origin main --force || true
        
        echo "Building Docker images..."
-       docker build -t lipaira-api:latest .
+       docker build --no-cache -t lipaira-api:latest .
        docker build -t lipaira-web:latest ./lipaira-web
        
        echo "Stopping old containers..."
