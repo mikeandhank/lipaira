@@ -840,7 +840,7 @@ class UsageTracker:
         'minimax/minimax-m2.5': 'minimax-m2.5',
         'minimax/minimax-01': 'minimax-01',
         # Google
-        'google/gemini-2.0-flash-exp': 'gemini-2.0-flash',
+        'google/gemini-2.5-flash-lite-preview-05-20': 'gemini-2.0-flash',
         'google/gemini-1.5-flash-8b-exp': 'gemini-2.0-flash',
     }
     
@@ -3124,7 +3124,7 @@ def chat():
     # Paid tier (credits > 0): use user's configured model from user_llm_config
     if user_credits <= 0:
         # Free tier — use Google Gemini Flash Lite
-        model = "gemini-2.0-flash-exp"
+        model = "gemini-2.5-flash-lite-preview-05-20"
         provider = "google"
     else:
         # Paid tier — read from user_llm_config
