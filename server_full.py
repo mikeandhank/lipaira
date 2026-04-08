@@ -3119,32 +3119,41 @@ def chat():
     user_credits = row[0] if row else 0
     conn.close()
     
-    # Get user's model preference from user_llm_config
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT provider, model FROM user_llm_config 
-            WHERE user_id = %s
-        """, (user_id,))
-        row = cursor.fetchone()
-        if row:
-            provider, model = row
-            # Use user's configured model - model already includes provider prefix for OpenRouter
-            # e.g., "minimax/minimax-m2.7" for openrouter
-            if provider == 'openrouter':
-                model = model  # Already in correct format "minimax/..."
-            elif provider:
-                model = f"{provider}/{model}"
-        else:
-            # Fallback for no config - use minimax via OpenRouter (free tier default)
-            model = "minimax/minimax-m2.7"
+    # TIER ROUTING: Select model based on credits (Contract V1d)
+    # Free tier (credits = 0): use free Google model
+    # Paid tier (credits > 0): use user's configured model from user_llm_config
+    if user_credits <= 0:
+        # Free tier — use Google Gemini Flash Lite
+        model = "gemini-2.0-flash-exp"
+        provider = "google"
+    else:
+        # Paid tier — read from user_llm_config
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT provider, model FROM user_llm_config 
+                WHERE user_id = %s LIMIT 1
+            """, (user_id,))
+            row = cursor.fetchone()
+            if row and row[0] and row[1]:
+                provider = row[0]
+                model = row[1]
+                # Handle provider prefixes
+                if provider == 'openrouter':
+                    model = model  # Already in "minimax/..." format
+                else:
+                    model = f"{provider}/{model}"
+            else:
+                # No config — fallback to openrouter/minimax
+                provider = "openrouter"
+                model = "minimax/minimax-m2.7"
+            conn.close()
+        except Exception as e:
+            logger.warning(f"Model config lookup failed: {e}")
+            # Fallback on error
             provider = "openrouter"
-        conn.close()
-    except Exception as e:
-        logger.warning(f"Model config lookup failed: {e}")
-        model = "minimax/minimax-m2.7"
-        provider = "openrouter"
+            model = "minimax/minimax-m2.7"
 
     if not message:
         return jsonify({"error": "message required"}), 400
@@ -3247,8 +3256,8 @@ def chat():
 
     # ── 3. CALL: LLM via router ──────────────────────────────────
     # Route model to provider
-    if model.startswith('minimax'):
-        provider = 'minimax'
+    if model.startswith('minimax') or 'minimax' in model:
+        provider = 'openrouter'
     elif model.startswith('gpt') or model.startswith('o1'):
         provider = 'openai'
     elif model.startswith('claude') or model.startswith('anthropic'):
@@ -3260,14 +3269,6 @@ def chat():
     
     import time
     start_time = time.time()
-
-    provider = "anthropic"
-    if model.startswith("gpt") or model.startswith("o1"):
-        provider = "openai"
-    elif model.startswith("gemini"):
-        provider = "google"
-    elif model.startswith("minimax"):
-        provider = "openrouter"
 
     # Check balance BEFORE LLM call (synchronous)
     balance_cents = get_user_balance_cents(user_id)
