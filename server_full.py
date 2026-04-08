@@ -3125,7 +3125,7 @@ def chat():
     if user_credits <= 0:
         # Free tier — use OpenRouter free model
         provider = "openrouter"
-        model = "google/gemini-2.0-flash-exp"
+        model = "openrouter/ministral-8b"
     else:
         # Paid tier — read from user_llm_config
         try:
