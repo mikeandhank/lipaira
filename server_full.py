@@ -3118,12 +3118,28 @@ def chat():
     user_credits = row[0] if row else 0
     conn.close()
     
-    # Free tier (0 credits): Gemini Flash-Lite
-    # Paid tier (credits > 0): MiniMax M2.7 via OpenRouter
-    if user_credits <= 0:
-        model = "gemini-2.5-flash-lite-preview-05-20"  # Free via Google AI
-    else:
-        model = data.get("model", "anthropic/claude-sonnet-4-20250514")
+    # Get user's model preference from user_llm_config
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT provider, model FROM user_llm_config 
+            WHERE user_id = %s
+        """, (user_id,))
+        row = cursor.fetchone()
+        if row:
+            provider, model = row
+            # Use user's configured model
+            if provider == 'openrouter':
+                model = f"openrouter/{model}"
+            elif provider:
+                model = f"{provider}/{model}"
+        else:
+            # Fallback for no config
+            model = "gemini-2.5-flash-lite-preview-05-20"
+        conn.close()
+    except Exception:
+        model = "gemini-2.5-flash-lite-preview-05-20"
 
     if not message:
         return jsonify({"error": "message required"}), 400
