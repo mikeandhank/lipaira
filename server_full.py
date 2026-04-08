@@ -3106,7 +3106,7 @@ def run_agentic_loop(user_id, messages, system_prompt, model, max_rounds=5, busi
 def chat():
     data = request.get_json() or {}
     message = data.get("message", "").strip()
-    message = sanitize_central_central_central_central_input(message)  # C8: prompt injection sanitize
+    message = sanitize_prompt_input(message)  # C8: prompt injection sanitize
     message = sanitize_prompt_input(message)  # C8: Prompt injection sanitization
     user_id = g.user_id
     
