@@ -3262,6 +3262,8 @@ def chat():
         provider = "openai"
     elif model.startswith("gemini"):
         provider = "google"
+    elif model.startswith("minimax"):
+        provider = "openrouter"
 
     # Check balance BEFORE LLM call (synchronous)
     balance_cents = get_user_balance_cents(user_id)
