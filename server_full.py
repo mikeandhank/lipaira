@@ -2990,20 +2990,25 @@ def run_agentic_loop(user_id, messages, system_prompt, model, provider, max_roun
         if not result.get('success'):
             return result
         
-        # Deduct credits for this LLM call
+        # Deduct credits for this LLM call (skip for free tier)
         try:
             input_tokens = result.get('input_tokens', 0)
             output_tokens = result.get('output_tokens', 0)
             if input_tokens > 0 or output_tokens > 0:
-                deduction = UsageTracker.record_usage(
-                    user_id=user_id,
-                    provider=provider,
-                    model=model,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens
-                )
-                if not deduction.get('success'):
-                    return {'success': False, 'error': f'Insufficient credits. Need {deduction.get("cost", 0):.4f}'}
+                # Only deduct if user has credits (paid tier)
+                if user_credits > 0:
+                    deduction = UsageTracker.record_usage(
+                        user_id=user_id,
+                        provider=provider,
+                        model=model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens
+                    )
+                    if not deduction.get('success'):
+                        return {'success': False, 'error': f'Insufficient credits. Need {deduction.get("cost", 0):.4f}'}
+                else:
+                    # Free tier - no credit deduction
+                    logger.warning(f"Free tier call: {input_tokens} input, {output_tokens} output tokens (no charge)")
         except Exception as e:
             logger.warning(f"Credit deduction failed: {e}")
         
