@@ -5,7 +5,7 @@ import os, urllib.request, json
 TOKEN = os.environ.get("NOTION_API_KEY") or open("/data/.openclaw/workspace/.notion_token").read().strip()
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Notion-Version": "2022-06-28", "Content-Type": "application/json"}
 
-CONTRACTS_DB = "33a8f06b-14e6-8145-8d82-f07062e5981a"
+CONTRACTS_DB = "33b8f06b-14e6-814b-a44b-d985feeeb5ac"
 DRAFT_DB = "33a8f06b-14e6-819e-8484-f87112df92e1"
 
 def query_db(db_id, payload=None):

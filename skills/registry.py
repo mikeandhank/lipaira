@@ -116,7 +116,7 @@ class SkillRegistry:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT provider FROM user_integrations
-                    WHERE user_id = %s AND connected = true
+                    WHERE user_id = %s AND is_active = true
                 """, (user_id,))
                 for row in cur.fetchall():
                     connected_providers.add(row[0])

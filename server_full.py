@@ -8,6 +8,7 @@ import os
 import random
 import threading
 import billing
+from api.prompt_sanitizer import sanitize_prompt_input, is_suspicious_input
 from billing import (
     deduct_usage,
     get_user_billing_info,
@@ -99,6 +100,14 @@ def get_memory_graph(user_id: str):
 from providers import load_secrets
 from user_provisioner import provision_user
 load_secrets()
+
+# Register all skills at startup
+try:
+    import skills  # triggers skills/__init__.py → populates skill_registry
+    from skills.registry import skill_registry as _sr
+    logger.info(f"Skill registry loaded: {len(_sr.list())} skills registered")
+except Exception as e:
+    logger.error(f"CRITICAL: Skill registry failed to load: {e}")
 
 # Import quickbooks after secrets are loaded
 from lipaira_client.quickbooks_oauth import quickbooks_bp
@@ -1198,7 +1207,7 @@ def register():
         cursor.execute("""
             INSERT INTO user_llm_config (id, user_id, provider, model, quality_preference, auto_route)
             VALUES (%s, %s, %s, %s, %s, true)
-        """, (str(uuid.uuid4()), user_id, 'openai', 'gpt-4o-mini', 'balanced'))
+        """, (str(uuid.uuid4()), user_id, 'openrouter', 'minimax/minimax-m2.7', 'balanced'))
         
         conn.commit()
         
@@ -1209,12 +1218,6 @@ def register():
             args=(user_id, 'free'),
             daemon=True
         ).start()
-        
-        # Give $50 signup bonus (will be available after verification)
-        try:
-            add_credits(user_id, STARTING_BALANCE_CENTS, source="signup_bonus")
-        except Exception as e:
-            logger.warning(f"Signup bonus failed: {e}")
         
         # Send verification email
         _send_verification_email(email, verification_code)
@@ -2938,9 +2941,13 @@ def run_agentic_loop(user_id, messages, system_prompt, model, max_rounds=5, busi
     # Get tools from skill registry
     try:
         from skills.registry import skill_registry
-        # Get all skills - return all available (not filtered by integration)
-        all_skills = skill_registry.list()
+        # Get skills available to this user based on connected integrations
+        all_skills = skill_registry.get_available_tools(user_id, business_id)
         logger.warning(f"SKILL_REGISTRY_COUNT: {len(all_skills)}")
+    except Exception as e:
+        logger.warning(f"Skill filter failed, showing all skills: {e}")
+        all_skills = skill_registry.list()
+        logger.warning(f"SKILL_REGISTRY_COUNT: {len(all_skills)} (fallback)")
         
         # Build SKILLS dict for tool execution
         SKILLS = {}
@@ -3099,6 +3106,8 @@ def run_agentic_loop(user_id, messages, system_prompt, model, max_rounds=5, busi
 def chat():
     data = request.get_json() or {}
     message = data.get("message", "").strip()
+    message = sanitize_central_central_central_central_input(message)  # C8: prompt injection sanitize
+    message = sanitize_prompt_input(message)  # C8: Prompt injection sanitization
     user_id = g.user_id
     
     # ── TIER ROUTING: Select model based on credits ────────────
