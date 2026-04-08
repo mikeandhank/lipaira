@@ -3123,9 +3123,9 @@ def chat():
     # Free tier (credits = 0): use free Google model
     # Paid tier (credits > 0): use user's configured model from user_llm_config
     if user_credits <= 0:
-        # Free tier — use OpenRouter free model
+        # Free tier — use OpenRouter free model (Mistral is reliably free)
         provider = "openrouter"
-        model = "openrouter/ministral-8b"
+        model = "mistralai/Mistral-7B-Instruct-v0.1"
     else:
         # Paid tier — read from user_llm_config
         try:
