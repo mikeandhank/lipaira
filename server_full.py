@@ -2939,6 +2939,7 @@ def run_agentic_loop(user_id, messages, system_prompt, model, max_rounds=5, busi
     provider = 'openrouter'
     
     # Get tools from skill registry
+    tools = []  # Initialize to avoid UnboundLocalError
     try:
         from skills.registry import skill_registry
         # Get skills available to this user based on connected integrations
