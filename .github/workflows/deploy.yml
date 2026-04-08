@@ -63,6 +63,7 @@ jobs:
        
        docker run -d \
          --name lipaira-api \
+         --env-file /home/ec2-user/nexusos/.env \
          --network nexusos_lipaira-net \
          --restart unless-stopped \
          -e AWS_REGION=us-east-2 \
