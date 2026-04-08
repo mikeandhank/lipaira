@@ -3123,9 +3123,9 @@ def chat():
     # Free tier (credits = 0): use free Google model
     # Paid tier (credits > 0): use user's configured model from user_llm_config
     if user_credits <= 0:
-        # Free tier — use OpenRouter free model (claude is reliable)
+        # Free tier — use OpenRouter free model (Qwen is reliably free)
         provider = "openrouter"
-        model = "anthropic/claude-3-haiku-20240307"
+        model = "qwen/qwen2.5-72b-instruct"
     else:
         # Paid tier — read from user_llm_config
         try:
@@ -3256,7 +3256,10 @@ def chat():
 
     # ── 3. CALL: LLM via router ──────────────────────────────────
     # Route model to provider
+    # All models go through openrouter for consistency (except direct API calls)
     if model.startswith('minimax') or 'minimax' in model:
+        provider = 'openrouter'
+    elif model.startswith('qwen') or 'qwen' in model:
         provider = 'openrouter'
     elif model.startswith('gpt') or model.startswith('o1'):
         provider = 'openai'
@@ -3265,7 +3268,7 @@ def chat():
     elif model.startswith('gemini') or model.startswith('google'):
         provider = 'google'
     else:
-        provider = 'anthropic'  # default
+        provider = 'openrouter'  # default to openrouter
     
     import time
     start_time = time.time()
