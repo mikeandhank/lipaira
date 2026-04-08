@@ -3137,11 +3137,14 @@ def chat():
             elif provider:
                 model = f"{provider}/{model}"
         else:
-            # Fallback for no config
-            model = "gemini-2.5-flash-lite-preview-05-20"
+            # Fallback for no config - use minimax via OpenRouter (free tier default)
+            model = "minimax/minimax-m2.7"
+            provider = "openrouter"
         conn.close()
-    except Exception:
-        model = "gemini-2.5-flash-lite-preview-05-20"
+    except Exception as e:
+        logger.warning(f"Model config lookup failed: {e}")
+        model = "minimax/minimax-m2.7"
+        provider = "openrouter"
 
     if not message:
         return jsonify({"error": "message required"}), 400
