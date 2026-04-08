@@ -3129,9 +3129,10 @@ def chat():
         row = cursor.fetchone()
         if row:
             provider, model = row
-            # Use user's configured model
+            # Use user's configured model - model already includes provider prefix for OpenRouter
+            # e.g., "minimax/minimax-m2.7" for openrouter
             if provider == 'openrouter':
-                model = f"openrouter/{model}"
+                model = model  # Already in correct format "minimax/..."
             elif provider:
                 model = f"{provider}/{model}"
         else:
