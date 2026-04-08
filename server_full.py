@@ -3123,9 +3123,9 @@ def chat():
     # Free tier (credits = 0): use free Google model
     # Paid tier (credits > 0): use user's configured model from user_llm_config
     if user_credits <= 0:
-        # Free tier — use Google Gemini Flash Lite
-        model = "gemini-2.5-flash-lite-preview-05-20"
-        provider = "google"
+        # Free tier — use OpenRouter free model (meta-free)
+        provider = "openrouter"
+        model = "meta-llama/llama-3.2-90b-text-preview"
     else:
         # Paid tier — read from user_llm_config
         try:
