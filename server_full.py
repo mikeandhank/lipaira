@@ -3123,9 +3123,9 @@ def chat():
     # Free tier (credits = 0): use free Google model
     # Paid tier (credits > 0): use user's configured model from user_llm_config
     if user_credits <= 0:
-        # Free tier — use OpenRouter free model (Qwen is reliably free)
+        # Free tier — use OpenRouter free model
         provider = "openrouter"
-        model = "qwen/qwen2.5-72b-instruct"
+        model = "google/gemini-2.0-flash-exp"
     else:
         # Paid tier — read from user_llm_config
         try:
