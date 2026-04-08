@@ -2939,26 +2939,20 @@ def run_agentic_loop(user_id, messages, system_prompt, model, provider, max_roun
         provider = 'openrouter'
     
     # Get tools from skill registry
-    tools = []  # Initialize to avoid UnboundLocalError
+    tools = []
+    SKILLS = {}
     try:
         from skills.registry import skill_registry
-        # Get skills available to this user based on connected integrations
         all_skills = skill_registry.get_available_tools(user_id, business_id)
         logger.warning(f"SKILL_REGISTRY_COUNT: {len(all_skills)}")
-    except Exception as e:
-        logger.warning(f"Skill filter failed, showing all skills: {e}")
-        all_skills = skill_registry.list()
-        logger.warning(f"SKILL_REGISTRY_COUNT: {len(all_skills)} (fallback)")
         
-        # Build SKILLS dict for tool execution
-        SKILLS = {}
+        # Build SKILLS dict and tools list — must be in the try block, not except
         for skill_info in all_skills:
             skill_obj = skill_registry.get(skill_info['name'])
             if skill_obj:
                 SKILLS[skill_info['name']] = skill_obj
-        tools = []
+        
         for skill in all_skills:
-            # Get input schema if skill has it
             input_schema = {}
             skill_obj = skill_registry.get(skill['name'])
             if skill_obj and hasattr(skill_obj, 'get_input_schema'):
@@ -2966,7 +2960,6 @@ def run_agentic_loop(user_id, messages, system_prompt, model, provider, max_roun
                     input_schema = skill_obj.get_input_schema()
                 except:
                     pass
-            
             tools.append({
                 "type": "function",
                 "function": {
@@ -2980,8 +2973,25 @@ def run_agentic_loop(user_id, messages, system_prompt, model, provider, max_roun
                 }
             })
     except Exception as e:
-        logger.warning(f"Failed to load skills: {e}")
-        tools = []
+        logger.warning(f"Skill filter failed, showing all skills: {e}")
+        try:
+            all_skills = skill_registry.list()
+            logger.warning(f"SKILL_REGISTRY_COUNT: {len(all_skills)} (fallback)")
+            for skill_info in all_skills:
+                skill_obj = skill_registry.get(skill_info['name'])
+                if skill_obj:
+                    SKILLS[skill_info['name']] = skill_obj
+            for skill in all_skills:
+                tools.append({
+                    "type": "function",
+                    "function": {
+                        "name": skill["name"],
+                        "description": skill["description"],
+                        "parameters": {"type": "object", "properties": {}, "required": []}
+                    }
+                })
+        except Exception as e2:
+            logger.error(f"Complete skill loading failure: {e2}")
     
     for round_num in range(1, max_rounds + 1):
         logger.warning(f"TOOLS_BEING_SENT: {len(tools)} tools - {[t.get('function', {}).get('name') for t in tools]}")
@@ -3113,7 +3123,6 @@ def chat():
     data = request.get_json() or {}
     message = data.get("message", "").strip()
     message = sanitize_prompt_input(message)  # C8: prompt injection sanitize
-    message = sanitize_prompt_input(message)  # C8: Prompt injection sanitization
     user_id = g.user_id
     
     # ── TIER ROUTING: Select model based on credits ────────────
@@ -3126,11 +3135,10 @@ def chat():
     
     # TIER ROUTING: Select model based on credits (Contract V1d)
     # Free tier (credits = 0): use free Google model
-    # Paid tier (credits > 0): use user's configured model from user_llm_config
+    # Locked decision: Gemini Flash-Lite via Google AI directly
     if user_credits <= 0:
-        # Free tier — use OpenRouter free model (Mistral is reliably free)
-        provider = "openrouter"
-        model = "mistralai/Mistral-7B-Instruct-v0.1"
+        provider = "google"
+        model = "gemini-2.5-flash-lite-preview-05-20"
     else:
         # Paid tier — read from user_llm_config
         try:
