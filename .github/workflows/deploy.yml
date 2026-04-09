@@ -35,13 +35,10 @@ jobs:
       key: ${{ secrets.EC2_SSH_KEY }}
       script: |
        set -e
+       
        cd /home/ec2-user/nexusos
-       
-       echo "Cleaning local changes..."
-       git remote set-url origin https://github.com/mikeandhank/lipaira.git
-       git checkout -- . 2>/dev/null || true
-       git pull origin main --force || true
-       
+       git pull origin main
+              
        echo "Building Docker images..."
        docker build --no-cache -t lipaira-api:latest .
        docker build -t lipaira-web:latest ./lipaira-web
