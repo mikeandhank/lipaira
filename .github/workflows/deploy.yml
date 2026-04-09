@@ -35,9 +35,9 @@ jobs:
       key: ${{ secrets.EC2_SSH_KEY }}
       script: |
        set -e
-       
        cd /home/ec2-user/nexusos
-       git pull origin main
+       git fetch origin
+       git reset --hard origin/main
               
        echo "Building Docker images..."
        docker build --no-cache -t lipaira-api:latest .
