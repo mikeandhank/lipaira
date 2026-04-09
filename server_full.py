@@ -840,7 +840,7 @@ class UsageTracker:
         'minimax/minimax-m2.5': 'minimax-m2.5',
         'minimax/minimax-01': 'minimax-01',
         # Google
-        'google/gemini-2.5-flash-lite-preview-05-20': 'gemini-2.0-flash',
+        'google/gemini-2.5-flash-lite': 'gemini-2.0-flash',
         'google/gemini-1.5-flash-8b-exp': 'gemini-2.0-flash',
     }
     
@@ -3151,7 +3151,7 @@ def chat():
     # Locked decision: Gemini Flash-Lite via Google AI directly
     if user_credits <= 0:
         provider = "openrouter"
-        model = "google/gemini-2.5-flash-lite-preview-05-20"
+        model = "google/gemini-2.5-flash-lite"
     else:
         # Paid tier — read from user_llm_config
         try:
