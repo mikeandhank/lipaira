@@ -14,6 +14,7 @@ on:
       - 'Dockerfile'
       - 'docker-entrypoint.sh'
       - 'integrations/**'
+      - 'skills/**'
       - 'lipaira-*/**'
       - 'web/**'
       - 'src/**'
