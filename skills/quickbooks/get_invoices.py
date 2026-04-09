@@ -14,8 +14,6 @@ class QuickBooksGetInvoicesSkill(BaseSkill):
     Params:
         days_overdue: Filter by days overdue (default 7)
         status: Filter by status - 'overdue', 'unpaid', 'all'
-    """
-    execution_tier = "free"  # Read-only: free tier allowed
     
     Returns:
         success: Whether the call succeeded
@@ -23,6 +21,8 @@ class QuickBooksGetInvoicesSkill(BaseSkill):
         count: Number of invoices
         total_outstanding: Sum of all overdue amounts
     """
+    execution_tier = "free"  # Read-only: free tier allowed
+    
     name = "quickbooks_get_invoices"
     description = (
         "Get unpaid invoices from QuickBooks. "
