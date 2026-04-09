@@ -9,6 +9,7 @@ class WebFetchSkill(BaseSkill):
     name = "web_fetch"
     description = "Fetch and extract content from web pages with SSRF protection"
     required_integrations = []  # No auth required
+    execution_tier = "free"  # Read-only: free tier allowed
     
     def get_input_schema(self):
         return {

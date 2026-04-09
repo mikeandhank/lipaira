@@ -26,6 +26,7 @@ class GmailReadSkill(BaseSkill):
     name = "gmail_read"
     description = "Read emails from Gmail inbox"
     required_integrations = ["google"]
+    execution_tier = "free"  # Read-only: free tier allowed
     
     def get_input_schema(self):
         return {

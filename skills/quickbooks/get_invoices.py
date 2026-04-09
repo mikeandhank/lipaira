@@ -14,6 +14,8 @@ class QuickBooksGetInvoicesSkill(BaseSkill):
     Params:
         days_overdue: Filter by days overdue (default 7)
         status: Filter by status - 'overdue', 'unpaid', 'all'
+    """
+    execution_tier = "free"  # Read-only: free tier allowed
     
     Returns:
         success: Whether the call succeeded
@@ -120,6 +122,7 @@ class QuickBooksGetCustomersSkill(BaseSkill):
     name = "quickbooks_get_customers"
     description = "List customers from QuickBooks"
     required_integrations = ["quickbooks"]
+    execution_tier = "free"  # Read-only: free tier allowed
     
     def execute(self, params: dict, user_id: str,
                 business_id: str = None) -> dict:

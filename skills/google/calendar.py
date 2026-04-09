@@ -13,6 +13,7 @@ class CalendarGetEventsSkill(BaseSkill):
     """Get calendar events from Google Calendar."""
     name = "calendar_get_events"
     description = "Get upcoming calendar events from Google Calendar."
+    execution_tier = "free"  # Read-only: free tier allowed
     
     def get_input_schema(self):
         return {

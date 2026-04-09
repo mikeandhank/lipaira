@@ -14,6 +14,7 @@ class BaseSkill(ABC):
     name: str = ""
     description: str = ""
     required_integrations: list = []
+    execution_tier: str = "paid"  # "free" or "paid" - safe default is paid
     
     def can_execute(self, user_id: str, business_id: str = None) -> dict:
         """Check if required integrations are connected.

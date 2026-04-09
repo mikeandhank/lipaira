@@ -9,6 +9,7 @@ class WebSearchSkill(BaseSkill):
     name = "web_search"
     description = "Search the web for current information using Brave Search API"
     required_integrations = []  # Uses BRAVE_SEARCH_API_KEY env var
+    execution_tier = "free"  # Read-only: free tier allowed
     
     def get_input_schema(self):
         return {

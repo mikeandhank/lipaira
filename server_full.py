@@ -3050,13 +3050,26 @@ def run_agentic_loop(user_id, messages, system_prompt, model, provider, max_roun
                 skill = SKILLS.get(skill_name)
                 logger.warning(f"TOOL_CALL: skill={skill_name}, input={block.get('input', {})}")
                 
-                # Check credits for tool execution (free tier = no tools)
+                # Check credits for tool execution (free tier = no paid-tier tools)
                 if user_credits <= 0:
-                    output = json.dumps({
-                        "error": "credits_required",
-                        "message": f"Connect credits to enable {skill_name}. Purchase credits to unlock tool execution."
-                    })
-                    logger.warning(f"TOOL_BLOCKED: free tier user {user_id} tried to use {skill_name}")
+                    # Get execution_tier from skill, default to "paid" (safe)
+                    skill_tier = getattr(skill, 'execution_tier', 'paid') if skill else 'paid'
+                    if skill_tier == 'paid':
+                        output = json.dumps({
+                            "error": "credits_required",
+                            "message": f"Connect credits to take this action. Free tier can read but not act."
+                        })
+                        logger.warning(f"TOOL_BLOCKED: free tier user {user_id} tried to use paid skill {skill_name}")
+                    else:
+                        # Free tier skill - allow execution
+                        logger.warning(f"TOOL_ALLOWED: free tier using free skill {skill_name}")
+                        try:
+                            result = skill.execute(block.get('input', {}), user_id)
+                            output = json.dumps(result)
+                            logger.warning(f"TOOL_RESULT: {output[:200]}")
+                        except Exception as e:
+                            output = f"Error: {str(e)}"
+                            logger.warning(f"TOOL_ERROR: {e}")
                 elif skill:
                     try:
                         result = skill.execute(block.get('input', {}), user_id)
