@@ -3291,7 +3291,7 @@ def chat():
         provider = 'openai'
     elif model.startswith('claude') or model.startswith('anthropic'):
         provider = 'anthropic'
-    elif model.startswith('gemini') or model.startswith('google'):
+    elif (model.startswith('gemini') or model.startswith('google')) and not model.startswith('google/'):
         provider = 'google'
     else:
         provider = 'openrouter'  # default to openrouter
