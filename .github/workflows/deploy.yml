@@ -38,6 +38,7 @@ jobs:
        cd /home/ec2-user/nexusos
        
        echo "Cleaning local changes..."
+       git remote set-url origin https://github.com/mikeandhank/lipaira.git
        git checkout -- . 2>/dev/null || true
        git pull origin main --force || true
        
