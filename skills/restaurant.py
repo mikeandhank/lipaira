@@ -30,7 +30,9 @@ class RestaurantReservationSkill:
         }
     
     def can_execute(self, user_id: str, business_id: str = None):
-        return {"can_run": True, "missing": [], "message": "Ready"}
+        if not os.getenv("OPENTABLE_API_KEY") and not os.getenv("RESY_API_KEY"):
+            return {"can_run": False, "reason": "No restaurant integration configured. Connect OpenTable or Resy in Settings."}
+        return {"can_run": True}
     
     def execute(self, input: dict, user_id: str) -> dict:
         query = input.get("query", "")
@@ -130,34 +132,19 @@ class RestaurantReservationSkill:
     
     def _search_availability(self, parsed: dict) -> list:
         """Search OpenTable/Resy for availability."""
-        # Mock results if no API key
-        if not OPENTABLE_API_KEY and not RESY_API_KEY:
-            base_options = [
-                {'restaurant': f'{parsed["cuisine"].title()} Place', 'rating': 4.5},
-                {'restaurant': f'The {parsed["cuisine"].title()} Kitchen', 'rating': 4.3},
-                {'restaurant': f'{parsed["cuisine"].title()} Bistro', 'rating': 4.7},
-            ]
-            return [
-                {
-                    **opt,
-                    'date': parsed['date'],
-                    'time': parsed['time'],
-                    'party_size': parsed['party_size'],
-                    'address': '123 Main St'
-                }
-                for opt in base_options
-            ]
-        
+        if not os.getenv("OPENTABLE_API_KEY") and not os.getenv("RESY_API_KEY"):
+            return []  # Caller handles empty list as no results
+
         # Real API call would go here
         return []
     
     def _confirm_reservation(self, option: dict, user_id: str) -> dict:
         """Confirm the reservation via API."""
-        import uuid
-        return {
-            'confirmation_id': f'RES-{uuid.uuid4().hex[:8].upper()}',
-            'restaurant': option['restaurant']
-        }
+        if not os.getenv("OPENTABLE_API_KEY") and not os.getenv("RESY_API_KEY"):
+            return {"success": False, "error": "No restaurant integration configured. Connect OpenTable or Resy in Settings."}
+        
+        # Real OpenTable/Resy integration not yet implemented
+        return {"success": False, "error": "Restaurant reservations not yet available."}
     
     def _create_calendar_event(self, option: dict, user_id: str):
         """Create calendar event for reservation."""

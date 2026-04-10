@@ -30,7 +30,9 @@ class GroceryOrderingSkill:
         }
     
     def can_execute(self, user_id: str, business_id: str = None):
-        return {"can_run": True, "missing": [], "message": "Ready"}
+        if not os.getenv("KROGER_API_KEY"):
+            return {"can_run": False, "reason": "Kroger integration not configured. Connect Kroger in Settings."}
+        return {"can_run": True}
     
     def execute(self, input: dict, user_id: str) -> dict:
         query = input.get("query", "")
@@ -108,6 +110,9 @@ class GroceryOrderingSkill:
     
     def _search_items(self, items: list) -> list:
         """Search for items via Kroger API."""
+        if not os.getenv("KROGER_API_KEY"):
+            return []  # Caller handles empty list as no results
+
         if not KROGER_API_KEY:
             # Mock response if no API key
             return [
@@ -139,7 +144,7 @@ class GroceryOrderingSkill:
             except Exception as e:
                 logger.warning(f"Kroger search failed for {item}: {e}")
         
-        return results or [{'name': i['item'], 'price': 5.99, 'quantity': i['qty'], 'unit': i['unit']} for i in items]
+        return results
     
     def _build_cart(self, items: list) -> list:
         """Build cart from search results."""
@@ -147,13 +152,11 @@ class GroceryOrderingSkill:
     
     def _place_order(self, cart: list, user_id: str) -> dict:
         """Place order via Instacart/Kroger."""
-        # Would integrate with actual API here
-        # For now, return mock confirmation
-        import uuid
-        return {
-            "order_id": f"ORD-{uuid.uuid4().hex[:8].upper()}",
-            "eta": "2 hours"
-        }
+        if not os.getenv("KROGER_API_KEY"):
+            return {"success": False, "error": "Kroger integration not configured. Connect Kroger in Settings."}
+        
+        # Real Kroger API integration not yet implemented
+        return {"success": False, "error": "Kroger ordering not yet available."}
 
 
 # Skill instance for registry
