@@ -120,6 +120,8 @@ jobs:
        echo "Deploy complete!"
 
  verify:
+  permissions:
+   contents: write
   needs: deploy
   runs-on: ubuntu-latest
   steps:
