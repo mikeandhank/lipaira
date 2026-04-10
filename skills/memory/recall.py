@@ -13,12 +13,3 @@ class MemoryRecallSkill(BaseSkill):
     def execute(self, params, user_id, business_id=None):
         return {"results": [], "note": "Not implemented"}
 
-
-class MemoryStoreSkill(BaseSkill):
-    """Store a memory in user's graph."""
-    name = "memory_store"
-    description = "Store memory in user's graph"
-    required_integrations = []
-    
-    def execute(self, params, user_id, business_id=None):
-        return {"stored": False, "note": "Not implemented"}
