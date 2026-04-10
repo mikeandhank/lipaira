@@ -118,3 +118,30 @@ jobs:
        curl -sf https://lipaira.ai | grep -q "<html" && echo "Frontend OK" || echo "Frontend may have issues"
        
        echo "Deploy complete!"
+
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Wait for deploy to stabilize
+        run: sleep 15
+
+      - name: Run production verification
+        env:
+          LIPAIRA_FREE_TEST_KEY: ${{ secrets.LIPAIRA_FREE_TEST_KEY }}
+        run: |
+          chmod +x scripts/verify_production.sh
+          bash scripts/verify_production.sh | tee verification_output.txt
+
+      - name: Commit verification output
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          TIMESTAMP=$(date -u +%Y%m%d_%H%M%S)
+          cp verification_output.txt docs/verification/auto_${TIMESTAMP}.md
+          git add docs/verification/
+          git commit -m "Auto-verification: $(date -u)" || echo "Nothing to commit"
+          git push || echo "Push failed, continuing"
