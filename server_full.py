@@ -440,6 +440,7 @@ JSON:"""
         cur = conn.cursor()
         # Collect node IDs for embedding generation
         stored_nodes = []
+        stored = 0  # Diagnosis: stored was used at line 458 with += but never initialized, causing NameError on successful memory store.
         
         for mem in memories:
             if not isinstance(mem, dict):
@@ -989,12 +990,14 @@ def require_auth(f):
             key_part = api_key.replace('sk-nexus-', '').replace('lp-', '')
             key_hash_part = hashlib.sha256(key_part.encode()).hexdigest()
             
+            # Diagnosis: The last two OR conditions compared plaintext apikey and keypart against keyhash column,
+            # which can never match since the column stores SHA256 hashes, not plaintext keys.
             cursor.execute("""
                 SELECT ak.user_id, u.email, u.credits, u.subscription_tier, u.role
                 FROM api_keys ak
                 JOIN users u ON u.id = ak.user_id
-                WHERE (ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
-            """, (key_hash, key_hash_part, api_key, key_part))
+                WHERE (ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
+            """, (key_hash, key_hash_part))
             
             row = cursor.fetchone()
             
