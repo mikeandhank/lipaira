@@ -50,14 +50,8 @@
     49|    """Decorator to ensure user is authenticated."""
     50|    from functools import wraps
     51|    @wraps(f)
-    52|    def decorated(*args, **kwargs):
-    53|        # First check for user_id in query params
-    54|        user_id = request.args.get('user_id')
-    55|        if user_id:
-    56|            g.user_id = user_id
-    57|            return f(*args, **kwargs)
-    58|        
-    59|        if not hasattr(g, 'user_id') or not g.user_id:
+    def decorated(*args, **kwargs):
+        if not hasattr(g, 'user_id') or not g.user_id:
     60|            # Check for API key
     61|            auth_header = request.headers.get('Authorization', '')
     62|            if auth_header.startswith('Bearer '):
