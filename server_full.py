@@ -965,6 +965,42 @@ class UsageTracker:
 # API KEY AUTHENTICATION
 # ============================================================================
 
+# Simple user object returned by get_user_by_key
+class _UserByKey:
+    """Lightweight user object for OAuth flows."""
+    def __init__(self, user_id, email=None, credits=None, tier=None, role=None):
+        self.id = user_id
+        self.email = email
+        self.credits = credits
+        self.subscription_tier = tier
+        self.role = role
+
+def get_user_by_key(api_key: str):
+    # Diagnosis: get_user_by_key was called in 5 OAuth connect handlers (zoom, calendly, meta_ads, canva, asana)
+    # but never defined, causing NameError at runtime when users tried to connect integrations.
+    # This function looks up a user by API key from the api_keys table.
+    if not api_key:
+        return None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        key_part = api_key.replace('sk-nexus-', '').replace('lp-', '')
+        key_hash_part = hashlib.sha256(key_part.encode()).hexdigest()
+        cursor.execute("""
+            SELECT ak.user_id, u.email, u.credits, u.subscription_tier, u.role
+            FROM api_keys ak
+            JOIN users u ON u.id = ak.user_id
+            WHERE (ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
+        """, (key_hash, key_hash_part))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return _UserByKey(row[0], row[1], float(row[2]) if row[2] else 0.0, row[3], row[4])
+        return None
+    except Exception:
+        return None
+
 def require_auth(f):
     """Decorator for API Key authentication."""
     @wraps(f)
