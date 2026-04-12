@@ -12,6 +12,7 @@ import requests
 from datetime import datetime
 
 DEFAULT_SERVER = "http://localhost:8080"
+# trigger QA pipeline
 
 
 class LipairaClient:
