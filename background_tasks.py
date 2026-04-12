@@ -176,7 +176,7 @@
    175|                                    cron = croniter(cron_expr, now)
    176|                                    new_next = cron.get_next(datetime)
    177|                                    
-   178|                                    with get_user_conn() as conn:
+   178|                                    with get_user_conn(user_id) as conn:
    179|                                        with conn.cursor() as cur:
    180|                                            cur.execute("""
    181|                                                UPDATE workflows 
