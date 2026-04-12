@@ -17,29 +17,14 @@
     16|
     17|logger = logging.getLogger(__name__)
     18|
-    19|# Import encryption from existing module
-    20|try:
-    21|    from encryption import encrypt_api_key, decrypt_api_key, get_encryption_key
-    22|except ImportError:
-    23|    # Fallback for when encryption module isn't available
-    24|    def encrypt_api_key(key: str) -> str:
-    25|        import base64
-    26|        return base64.b64encode(key.encode()).decode()
-    27|    
-    28|    def decrypt_api_key(encrypted: str) -> str:
-    29|        import base64
-    30|        return base64.b64decode(encrypted.encode()).decode()
-    31|    
-    32|    def get_encryption_key():
-    33|        key = os.environ.get('ENCRYPTION_KEY')
-    34|        if not key:
-    35|            env = os.environ.get('NEXUSOS_ENV', 'development')
-    36|            if env == 'production':
-    37|                raise ValueError("ENCRYPTION_KEY environment variable is required in production")
-    38|            import warnings
-    39|            warnings.warn("Using insecure dev key fallback — set ENCRYPTION_KEY for production")
-    40|            key = 'dev-key-do-not-use-in-prod'
-    41|        return key
+# Import encryption from existing module
+try:
+    from encryption import encrypt_api_key, decrypt_api_key, get_encryption_key
+except ImportError:
+    raise ImportError(
+        "encryption module is required but not available. "
+        "Credential store cannot use base64 fallback — real encryption is mandatory."
+    )
     42|
     43|
     44|# Provider configuration
