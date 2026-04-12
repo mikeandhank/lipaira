@@ -13,7 +13,7 @@ from datetime import datetime
 from flask import jsonify, request, make_response, g
 
 # Twilio credentials - require them to be set
-TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
 TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
 TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER', '')
 
@@ -134,13 +134,38 @@ def create_twilio_routes(app, require_auth):
         if len(message) > 1600:
             return jsonify({'error': 'Message too long (max 1600 chars)'}), 400
         
-        # In production, this would use twilio library:
-        # from twilio.rest import Client
-        # client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-        # client.messages.create(body=message, from_=TWILIO_PHONE_NUMBER, to=to_number)
-        
-        # Store message log
-        msg_id = str(uuid.uuid4())
+        # Use real Twilio API
+        try:
+            from twilio.rest import Client
+            client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+            twilio_msg = client.messages.create(
+                body=message,
+                from_=TWILIO_PHONE_NUMBER,
+                to=to_number
+            )
+            msg_id = twilio_msg.sid
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+        # Store message log in database
+        try:
+            import psycopg2
+            db_url = os.environ.get('DATABASE_URL', '')
+            if db_url:
+                conn = psycopg2.connect(db_url)
+                cur = conn.cursor()
+                cur.execute(
+                    "INSERT INTO sms_messages(sid, to_number, from_number, body, status, direction, created_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                    "ON CONFLICT (sid) DO UPDATE SET status = EXCLUDED.status",
+                    (msg_id, to_number, TWILIO_PHONE_NUMBER, message, 'sent', 'outbound', datetime.utcnow().isoformat())
+                )
+                conn.commit()
+                cur.close()
+                conn.close()
+        except Exception:
+            pass  # DB logging is best-effort
+
         MESSAGES[msg_id] = {
             'id': msg_id,
             'to': to_number,
