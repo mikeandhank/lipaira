@@ -50,9 +50,11 @@
     49|            password=parsed.password,
     50|            dbname=parsed.path.lstrip("/") or "nexusos",
     51|        )
-    52|        schema = f"u{hashlib.md5(user_id.encode()).hexdigest()[:8]}"
-    53|        cur = conn.cursor()
-    54|        cur.execute(f"SET search_path TO {schema}, public")
+        schema = f"u{hashlib.md5(user_id.encode()).hexdigest()[:8]}"
+        cur = conn.cursor()
+        # Diagnosis: SET search_path used string interpolation which is SQL injection risk.
+        # Fix: use parameterized query which psycopg2 handles safely for SET statements.
+        cur.execute("SET search_path TO %s, public", (schema,))
     55|        conn.commit()
     56|        return conn
     57|
