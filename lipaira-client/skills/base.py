@@ -1,3 +1,10 @@
+"""
+Base Skill Framework
+===================
+Abstract base classes for all agent skills.
+Defines the SkillResult model and BaseSkill interface.
+"""
+
 from abc import ABC, abstractmethod
 from pydantic import BaseModel
 from typing import Any
