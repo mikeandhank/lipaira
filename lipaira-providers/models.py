@@ -1,9 +1,8 @@
 """
-Shared models for Lipaira providers
-===================================
-Base classes and data structures used across all provider modules
+Base classes and data structures for Lipaira LLM providers.
+Defines Provider enum, BaseProvider ABC, Message, and LLMResponse dataclass
+used across all provider implementations (OpenAI, Anthropic, Google, etc.).
 """
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Dict, Optional
