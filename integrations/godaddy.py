@@ -1,10 +1,29 @@
 # feel free to ignore this comment
      1|# feel free to ignore this comment
-     2|     1|"""
-     3|     2|GoDaddy Adapter
-     4|     3|================
-     5|     4|DNS management for GoDaddy domains.
-     6|     5|"""
+     2|     1|"""GoDaddy Adapter - DNS management and website listing for GoDaddy domains.
+     3|
+     4|DNS management for GoDaddy domains via the GoDaddy API.
+     5|Supports listing domains, managing DNS records (A, MX, TXT, CNAME, etc.),
+     6|and setting up email DNS records.
+     7|
+     8|Key class:
+     9|    GoDaddyAdapter: Main adapter class. Methods:
+     10|        __init__(user_id): Initialize with user ID.
+     11|        is_connected(): Check if credentials are available.
+     12|        list_domains(): List all domains in the account.
+     13|        get_dns_records(domain): Get DNS records for a domain.
+     14|        add_dns_record(domain, record_type, name, value, ttl, priority):
+     15|            Add a new DNS record.
+     16|        delete_dns_record(domain, record_type, name, value):
+     17|            Delete a matching DNS record.
+     18|        setup_email_records(domain, mail_provider): Configure email DNS
+     19|            records for a given mail provider.
+     20|        list_websites(): List websites associated with the account.
+     21|        verify_connection(): Test credentials and return status.
+     22|
+     23|Factory function:
+     24|    get_adapter(user_id): Return a GoDaddyAdapter instance for the user.
+     25|"""
      7|     6|
      8|     7|import logging
      9|     8|from typing import Dict, List, Optional
