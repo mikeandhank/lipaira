@@ -1,8 +1,29 @@
 # feel free to ignore this comment
-     1|"""
-     2|Google OAuth integration for Lipaira.
-     3|Add to gateway: from google_oauth import create_google_routes
-     4|"""
+     1|"""Google OAuth integration for Lipaira.
+     2|
+     3|Implements OAuth 2.0 PKCE flow for Google services (Gmail, Calendar,
+     4|Drive, Business Profile). Stores tokens in Redis with state verification,
+     5|persists long-term credentials to PostgreSQL via save_user_integration,
+     6|and triggers background data sweeps after successful auth.
+     7|
+     8|Key constants:
+     9|    GOOGLE_SCOPES: Full list of Google permission scopes.
+     10|    GOOGLE_SERVICE_SCOPES: Granular scopes per service (gmail, calendar, etc.).
+     11|
+     12|Key functions:
+     13|    generate_code_verifier() / generate_code_challenge(verifier): PKCE helpers.
+     14|    get_flow(): Build google_auth_oauthlib Flow object.
+     15|    store_oauth_state(...) / get_oauth_state(state): Redis state management.
+     16|    save_user_integration(...) / get_user_integration(...): Persist/retrieve
+     17|        OAuth tokens to/from PostgreSQL.
+     18|    trigger_all_sweeps(user_id): Fire all per-service sweeps post-auth.
+     19|    sweep_gmail / sweep_google_calendar / sweep_notion: Per-service data
+     20|        ingestion into memory nodes.
+     21|    google_connect(): OAuth initiation endpoint (/auth/google).
+     22|    google_callback(): Token exchange + save + sweep trigger.
+     23|    google_disconnect(): Revoke token and remove integration.
+     24|    google_status(): Return current integration status.
+     25|"""
      5|import os
      6|import secrets
      7|import hashlib
