@@ -1,15 +1,10 @@
 """
-Lipaira Unified Request API
-===========================
-Simple, standardized API for all LLM requests
-
-Design principles:
-1. Single endpoint for all requests
-2. Auto-detect task type and select model
-3. Honor user preferences automatically
-4. Simple request/response format
+Unified Request API for Lipaira LLM interactions.
+Single Flask blueprint entry point for all LLM requests:
+  POST /api/unified/chat   - route to appropriate model
+  GET  /api/unified/models - list available models
+Design principles: single endpoint, auto task detection, honor user preferences.
 """
-
 from flask import Blueprint, request, jsonify
 from dataclasses import dataclass, asdict
 from typing import Optional, List, Dict, Any

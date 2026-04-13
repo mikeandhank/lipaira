@@ -1,10 +1,9 @@
 """
-OPERATOR_CONTEXT - Layer 2 of Lipaira's prompt architecture
-
-Dynamic context per user/business/conversation.
-Memory is retrieved in four passes before assembling the prompt.
+Operator Context Builder — Layer 2 of Lipaira's prompt architecture.
+Assembles dynamic context (user, business, conversation-specific) from memory
+and session state before each LLM response. Memory is retrieved in four passes
+and merged into the operator prompt. Called once per conversation at first message.
 """
-
 from datetime import datetime
 import logging
 import json

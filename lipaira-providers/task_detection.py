@@ -1,9 +1,9 @@
 """
-Task-Based Model Selection
-==========================
-Automatically select best model based on task type detected from message
+Task-Based Model Selection for Lipaira.
+Automatically detects the type of a user message (coding, vision, reasoning,
+general, etc.) using keyword/regex patterns. Returns a TaskType enum value used
+by the router to select the appropriate model for the request.
 """
-
 from enum import Enum
 from typing import List, Dict, Optional
 import re

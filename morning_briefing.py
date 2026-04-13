@@ -1,15 +1,10 @@
 """
-MORNING BRIEFING ENGINE
-========================
-
-Per SPEC v6 Block 2 Item 5:
-- Schedule: 7:00 AM user's local timezone, daily
-- Delivery: email to user's primary address
-- Content: today's calendar events, overdue invoices, pending approvals,
-           top memory surface, one proactive suggestion
-- No hardcoded content - every briefing is live data
+Morning Briefing Engine for Lipaira (SPEC v6 Block 2 Item 5).
+Generates daily briefings delivered by email at 7:00 AM user local time.
+Content includes: today's calendar events, overdue invoices, pending approvals,
+top memory surface, and one proactive suggestion. All content is live data —
+no hardcoded text.
 """
-
 import os
 import json
 import logging

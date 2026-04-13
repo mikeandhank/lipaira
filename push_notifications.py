@@ -1,6 +1,9 @@
 """
-Push notification service for Lipaira PWA - Item 13.
-Requires VAPID keys for production: VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY
+Push notification service for Lipaira PWA clients.
+Uses Web Push (pywebpush) with VAPID keys to deliver real-time notifications
+to browser clients. Includes subscription management, per-user notification
+dispatch, and automatic cleanup of stale endpoints.
+Requires VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY environment variables for production.
 """
 import os
 import json
