@@ -1,9 +1,33 @@
 # feel free to ignore this comment
-     1|"""
-     2|Squarespace Adapter
-     3|====================
-     4|Website and Commerce integration for Squarespace.
-     5|"""
+     1|"""Squarespace Adapter - Website and Commerce API integration for Squarespace.
+     2|
+     3|Provides a Pythonic interface to the Squarespace API for managing websites,
+     4|products (with pricing and inventory), and orders. Supports fetching data,
+     5|updating product metadata, order fulfillment, and syncing products to DB.
+     6|
+     7|Key class:
+     8|    SquarespaceAdapter: Main adapter. Methods:
+     9|        __init__(user_id): Initialize with user ID.
+     10|        is_connected(): Check if credentials are available.
+     11|        _get_website_id(): Look up the primary website ID for the account.
+     12|        list_websites(): List all websites in the account.
+     13|        get_website_info(website_id): Get metadata for a website.
+     14|        get_products(website_id) / get_product(website_id, product_id):
+     15|            List or fetch a single product.
+     16|        update_product_price(website_id, product_id, price):
+     17|            Update product price.
+     18|        update_product_inventory(website_id, product_id, quantity):
+     19|            Update inventory count.
+     20|        get_orders(website_id) / get_order(website_id, order_id):
+     21|            List or fetch a single order.
+     22|        fulfill_order(website_id, order_id, tracking_number):
+     23|            Mark order as fulfilled with tracking info.
+     24|        sync_products_to_database(website_id): Bulk-sync products to DB.
+     25|        verify_connection(): Test credentials and return status.
+     26|
+     27|Factory function:
+     28|    get_adapter(user_id): Return a SquarespaceAdapter instance for the user.
+     29|"""
      6|
      7|import os
      8|import json
