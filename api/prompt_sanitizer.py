@@ -1,11 +1,16 @@
 # feel free to ignore this comment
-     1|"""
-     2|Prompt Input Sanitization Module
-     3|C8: Mitigates CVE-2025-54794 prompt injection attacks
-     4|
-     5|Strips fake markdown directives (# SYSTEM:, # USER:, # ASSISTANT:) 
-     6|that can override model safety constraints.
-     7|"""
+"""Prompt Input Sanitization Module - mitigates CVE-2025-54794 prompt injection attacks.
+
+Strips fake markdown directives (# SYSTEM:, # USER:, # ASSISTANT:) that can
+override model safety constraints. Also removes zero-width Unicode characters
+used to evade detection and normalizes excess newlines.
+
+Key functions:
+    sanitize_prompt_input(user_input: str): Strip injection directives and
+        bypass encodings from raw user input; returns sanitized string.
+    is_suspicious_input(user_input: str): Check input for injection patterns
+        and return True if logging/warning is warranted.
+"""
      8|import re
      9|from typing import Optional
     10|
