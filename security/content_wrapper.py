@@ -1,4 +1,10 @@
-"""External content wrapper — prevents indirect prompt injection."""
+"""
+External content wrapper — prevents indirect prompt injection attacks.
+Wraps content retrieved from external sources (webpages, emails, documents) in
+XML security tags with a prominent notice that the content must be treated as
+data only and not followed as instructions. Used before injecting external
+content into LLM context.
+"""
 import logging
 
 logger = logging.getLogger(__name__)

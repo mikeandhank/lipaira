@@ -1,5 +1,7 @@
 """
-Square skills for invoicing, customers, and appointments.
+Square integration skills for Lipaira client.
+Provides Square API capabilities: creating/sending invoices, looking up customers,
+and listing appointments. Routes through GATEWAY_URL for token management.
 """
 import os
 import requests

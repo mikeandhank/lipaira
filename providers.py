@@ -1,4 +1,9 @@
-"""Provider configuration for Lipaira - loads from AWS Secrets Manager."""
+"""
+Provider configuration loader for Lipaira.
+Maps integration secret names (QuickBooks, Shopify, Slack, etc.) to environment
+variables by loading credentials from AWS Secrets Manager at startup. Falls back to
+environment variables when Secrets Manager is unavailable.
+"""
 
 import os
 import json
