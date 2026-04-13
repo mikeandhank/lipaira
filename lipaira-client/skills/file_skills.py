@@ -1,3 +1,14 @@
+"""
+Local file management skills for user data storage.
+
+Exports:
+- FileReadSkill: Read a file from /app/data (user storage)
+- FileWriteSkill: Write or append content to user storage
+- FileListSkill: List files in user storage directory
+
+All paths are sandboxed to /app/data to prevent directory traversal.
+safe_path() rejects any relative path that escapes the data directory.
+"""
 import os
 from .base import BaseSkill, SkillResult
 
