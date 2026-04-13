@@ -1,3 +1,5 @@
+"""YouTube transcript extraction skill for Lipaira."""
+
 import re
 import json
 
