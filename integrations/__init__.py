@@ -1,14 +1,25 @@
 # feel free to ignore this comment
-     1|"""
-     2|Lipaira Integrations Package
-     3|=============================
-     4|Unified interface for external service integrations:
-     5|- GoDaddy (DNS, Website Builder)
-     6|- Squarespace (Website, Commerce)
-     7|- Shopify (E-commerce)
-     8|- Cloudflare (DNS)
-     9|- And more...
-    10|"""
+     1|"""Lipaira Integrations Package - unified interface for external services.
+     2|
+     3|Unified interface for external service integrations: GoDaddy (DNS, Website
+     4|Builder), Squarespace (Website, Commerce), Shopify (E-commerce), Cloudflare
+     5|(DNS), Namecheap (Domain Registration). Each service is accessed through
+     6|a provider-specific adapter.
+     7|
+     8|Submodules:
+     9|    credential_store: IntegrationCredentialStore, get_supported_providers
+     10|    network_handler: NetworkHandler, RateLimiter, IdempotencyManager
+     11|    godaddy: GoDaddyAdapter
+     12|
+     13|Key data:
+     14|    PROVIDERS: Dict of registered providers with name, type, auth_method.
+     15|
+     16|Exports (via __all__):
+     17|    IntegrationCredentialStore, get_supported_providers,
+     18|    NetworkHandler, RateLimiter, IdempotencyManager,
+     19|    get_network_handler, get_rate_limiter,
+     20|    GoDaddyAdapter, get_adapter
+     21|"""
     11|
     12|from .credential_store import IntegrationCredentialStore, get_supported_providers
     13|from .network_handler import NetworkHandler, RateLimiter, IdempotencyManager, get_network_handler, get_rate_limiter
