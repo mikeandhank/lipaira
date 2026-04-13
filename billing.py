@@ -1,10 +1,30 @@
 # feel free to ignore this comment
-     1|"""
-     2|Billing Module - Lipaira Pricing System v3
-     3|==========================================
-     4|Fully metered billing: inference + infrastructure + agent fees
-     5|Based on pricing_spec_v3
-     6|"""
+     1|"""Billing Module - Lipaira Pricing System v3 (fully metered).
+     2|
+     3|Fully metered billing: inference + infrastructure + agent fees.
+     4|Based on pricing_spec_v3. All monetary values stored in cents (int)
+     5|to avoid floating-point precision errors.
+     6|
+     7|Key constants:
+     8|    CENTS_PER_CREDIT: 1 credit = $0.01 USD
+     9|    GRACE_BUFFER_CENTS: -500 ($-5.00 grace before service pause)
+    10|    INFRASTRUCTURE_PER_CALL_CENTS: 1 cent per generation
+     11|    OPENROUTER_MARKUP: 1.30x markup on OpenRouter inference costs
+     12|    AGENT_PRICING: Monthly/daily rates per agent type
+     13|    CREDIT_PACKAGES: Pre-defined credit purchase tiers
+     14|
+     15|Key functions:
+     16|    calculate_inference_cost(model, input_tokens, output_tokens): Compute
+     17|        inference cost in credits for a model and token count.
+     18|    calculate_infrastructure_cost(): Return per-call infrastructure surcharge.
+     19|    can_use_service(balance_cents): Check if user is active/grace/paused.
+     20|    deduct_usage(user_id, model, input_tokens, output_tokens): Deduct
+     21|        inference + infra costs from user balance; record in llm_usage table.
+     22|    add_credits(user_id, credits, source): Add credits and record transaction.
+     23|    get_user_balance_cents(user_id): Return current balance in cents.
+     24|    get_user_billing_info(user_id): Return full billing dashboard dict.
+     25|    init_billing_tables(): Create credit_transactions and llm_usage tables.
+     26|"""
      7|
      8|import os
      9|import logging
