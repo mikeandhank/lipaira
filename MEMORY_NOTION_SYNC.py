@@ -1,6 +1,18 @@
 # feel free to ignore this comment
      1|#!/usr/bin/env python3
-     2|"""Notion sync — structured runtime state for boot."""
+"""Notion sync - structured runtime state for boot.
+
+Queries two Notion databases (CONTRACTS_DB and DRAFT_DB) to build a
+runtime state dict with P0/P1 contracts, blockers, high-priority draft
+items, and process violations. Designed to be run at agent boot to
+populate working memory from Notion.
+
+Key functions:
+    query_db(db_id, payload=None): POST to Notion database query endpoint.
+    get_name(props): Extract page name from title or rich_text properties.
+    main(): Query both databases, classify items by priority/status, and
+            print a structured summary to stdout.
+"""
      3|import os, urllib.request, json
      4|
      5|TOKEN=os.env...EY") or open("/data/.openclaw/workspace/.notion_token").read().strip()
