@@ -1,8 +1,8 @@
 """
-Memory Sweep - Extract context from integrations
-=================================================
-When user connects an integration, sweep historical data
-to build immediate context for the agent.
+Memory Sweep — integration context loader for Lipaira.
+When a user connects a new integration (QuickBooks, Google, etc.), this module
+triggers an async background sweep to extract historical data and build
+immediate context for the operator. Prevents empty-state syndrome after OAuth.
 """
 import logging
 import os

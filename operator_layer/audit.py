@@ -1,9 +1,9 @@
 """
-Audit Logger
-============
-Logs all operator actions for compliance and debugging.
+Audit Logger — compliance and debugging log for operator actions.
+Records every platform operation (intent, action, platform, before/after state,
+status) to the audit_log table. Includes compute_intent_hash() for deduplication
+and get_audit_logger() singleton pattern. All operator actions are logged.
 """
-
 import os
 import json
 import logging

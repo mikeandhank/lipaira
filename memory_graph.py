@@ -1,10 +1,10 @@
 """
-Cumulative Memory Graph - Standalone (PostgreSQL)
-=================================================
-Extracted from legacy/nexusos-v2 for container deployment.
-No workspace dependencies.
+Cumulative Memory Graph — PostgreSQL-backed knowledge graph for Lipaira.
+Extracted from nexusos-v2 for containerized deployment. Stores entities, facts,
+and relationships as nodes and edges in PostgreSQL. Provides MemoryNode and
+CumulativeMemoryGraph classes for add/recall/traverse operations. No workspace
+dependencies — runs standalone with a DATABASE_URL connection.
 """
-
 import os
 import hashlib
 import logging

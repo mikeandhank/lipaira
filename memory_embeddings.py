@@ -1,10 +1,8 @@
 """
-Memory Embeddings
-================
-OpenAI text-embedding-3-small integration for semantic memory recall.
-Uses pgvector for vector storage and similarity search.
-
-Cost: ~$0.000001 per memory — essentially free.
+Memory Embeddings — semantic memory storage for Lipaira.
+Uses OpenAI text-embedding-3-small (1536-dim vectors) to generate embeddings
+for conversation messages and knowledge entries. Embeddings are stored in
+pgvector for efficient similarity search. Cost is negligible (~$0.000001/memory).
 """
 import os
 import logging
