@@ -1,10 +1,30 @@
 # feel free to ignore this comment
-     1|"""
-     2|Network Handler
-     3|===============
-     4|Handles external API calls with rate limiting, retry logic,
-     5|and user-friendly error translation.
-     6|"""
+     1|"""Network Handler - rate limiting, retries, and error translation for external API calls.
+     2|
+     3|Handles external API calls with rate limiting, retry logic, and
+     4|user-friendly error translation. Provides three main classes.
+     5|
+     6|Key classes:
+     7|    RateLimiter: Token-bucket rate limiter. Methods:
+     8|        acquire(provider, rate_limit, tokens): Acquire tokens or wait.
+     9|        wait_time(provider): Seconds until next token available.
+     10|        reset(provider): Reset rate limit state for a provider.
+     11|    NetworkHandler: Executes HTTP requests with rate limiting, retries
+     12|        (with exponential backoff), and error translation. Method:
+     13|        call(provider, rate_limit, method, url, **kwargs): Make a
+     14|            rate-limited, retried HTTP request.
+     15|    IdempotencyManager: Prevents duplicate operations using Redis.
+     16|        Methods:
+     17|        check(provider, operation, idempotency_key): Check if an
+     18|            operation was already performed (returns cached result).
+     19|        dns_record_exists(domain, record_type, name): Specialized check
+     20|            for whether a DNS record already exists.
+     21|        log_action(provider, action, result): Record an action result.
+     22|
+     23|Factories:
+     24|    get_rate_limiter(): Return the singleton RateLimiter instance.
+     25|    get_network_handler(): Return the singleton NetworkHandler instance.
+     26|"""
      7|
      8|import os
      9|import time
