@@ -1,6 +1,12 @@
-"""
-Swarm Orchestration skills for Lipaira.
-Enables multi-agent swarm workflows from chat.
+"""Swarm orchestration skills for Lipaira.
+
+Provides skills for creating and managing multi-agent swarms.
+Enables parallel task execution across specialized agents.
+
+Key functions/classes:
+    SwarmCreateSkill: Creates a new swarm with specified agents
+    SwarmExecuteSkill: Executes tasks across a swarm of agents
+    SwarmListSkill: Lists user's existing swarms
 """
 
 import requests

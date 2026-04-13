@@ -1,4 +1,11 @@
-"""Memory store skill — explicitly stores a fact to the user's memory graph."""
+"""Memory store skill for Lipaira.
+
+Provides skill for explicitly storing facts to user's long-term memory.
+Stores nodes in the memory_nodes table with optional embeddings.
+
+Key functions/classes:
+    MemoryStoreSkill: Stores content in memory_nodes table with type, confidence, source
+"""
 
 import os
 import uuid

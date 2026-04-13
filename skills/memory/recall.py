@@ -1,4 +1,13 @@
-"""Memory skills placeholder."""
+"""Memory skills package for Lipaira.
+
+Provides skills for storing and recalling user memory:
+- MemoryStoreSkill: Store facts, preferences, and context to long-term memory
+- MemoryRecallSkill: Query user's memory graph
+
+Key functions/classes:
+    MemoryRecallSkill: Queries user's memory graph (placeholder - not implemented)
+    MemoryStoreSkill: Stores nodes in memory_nodes table with embeddings
+"""
 
 from skills.registry import BaseSkill
 

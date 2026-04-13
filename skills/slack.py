@@ -1,5 +1,14 @@
-"""
-Slack integration skills - wraps lipaira-client version.
+"""Slack integration skills for Lipaira.
+
+Provides skills for interacting with Slack:
+- SlackPostSkill: Post messages to channels
+- SlackReadChannelSkill: Read recent messages from channels
+- SlackDMSendSkill: Send direct messages to users
+
+Key functions/classes:
+    SlackPostSkill: Posts message to a specified Slack channel
+    SlackReadChannelSkill: Reads recent messages from a channel
+    SlackDMSendSkill: Sends direct message to a Slack user
 """
 from skills.registry import BaseSkill
 from lipaira_client.skills.slack_skills import (

@@ -1,4 +1,11 @@
-"""Grocery ordering skill - per SPEC Item 11."""
+"""Grocery ordering skill for Lipaira.
+
+Provides skill for ordering groceries via Kroger API (Instacart fallback).
+Per SPEC Item 11 - natural language grocery ordering.
+
+Key functions/classes:
+    GroceryOrderingSkill: Parses NL queries, searches items, builds cart, places orders
+"""
 import os
 import logging
 import json

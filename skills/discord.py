@@ -1,5 +1,10 @@
-"""
-Discord integration skill - wraps lipaira-client version.
+"""Discord integration skill for Lipaira.
+
+Provides a skill for sending messages to Discord channels.
+Uses Discord OAuth tokens fetched from the database.
+
+Key functions/classes:
+    DiscordSendSkill: Sends a message to a Discord channel
 """
 from skills.registry import BaseSkill
 from lipaira_client.skills.discord_skill import DiscordSendSkill as _DiscordSendSkill

@@ -1,4 +1,11 @@
-"""GitHub integration skill - wraps lipaira-client version."""
+"""GitHub integration skill for Lipaira.
+
+Provides skills for interacting with GitHub repositories.
+Uses GITHUB_TOKEN from environment variables.
+
+Key functions/classes:
+    GitHubSkill: Creates issues, PRs, and lists repository issues
+"""
 from skills.registry import BaseSkill
 from lipaira_client.skills.github_skill import GitHubSkill as _GitHubSkill
 

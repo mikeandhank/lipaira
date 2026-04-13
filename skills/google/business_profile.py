@@ -1,4 +1,11 @@
-"""Google Business Profile skill."""
+"""Google Business Profile skill for Lipaira.
+
+Provides skills for updating Google Business Profile listings.
+Uses Google OAuth tokens fetched from the database.
+
+Key functions/classes:
+    GoogleBusinessUpdateSkill: Updates business profile information
+"""
 
 from skills.registry import BaseSkill
 from skills.base import get_integration_tokens

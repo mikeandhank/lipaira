@@ -1,5 +1,12 @@
-"""
-Canva skills for Lipaira.
+"""Canva integration skills for Lipaira.
+
+Provides skills for interacting with Canva's REST API.
+Each skill fetches OAuth tokens from the database and uses them to
+authenticate requests to Canva's API.
+
+Key functions/classes:
+    CanvaGetDesignsSkill: Fetches recent designs with titles, IDs, and URLs
+    CanvaCreateDesignSkill: Creates new designs with type and title
 """
 
 import requests

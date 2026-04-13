@@ -1,4 +1,12 @@
-"""Notion skills - search and create pages."""
+"""Notion integration skills for Lipaira.
+
+Provides skills for interacting with Notion workspaces.
+Uses Notion OAuth tokens fetched from the database.
+
+Key functions/classes:
+    NotionSearchSkill: Searches Notion pages and databases
+    NotionCreatePageSkill: Creates new pages in workspaces or databases
+"""
 
 import json
 import logging

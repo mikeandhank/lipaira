@@ -1,4 +1,13 @@
-"""Skill registry and base skill class."""
+"""Skill registry and base skill class for Lipaira.
+
+Defines the BaseSkill abstract class that all skills inherit from,
+and the SkillRegistry for managing available skills.
+
+Key functions/classes:
+    BaseSkill: Abstract base class for all skills with execute/can_execute methods
+    SkillRegistry: Registry for registering, listing, and retrieving skills
+    skill_registry: Global registry instance
+"""
 
 from abc import ABC, abstractmethod
 from typing import Any
