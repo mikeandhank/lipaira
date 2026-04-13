@@ -1,7 +1,8 @@
 """
-PDF generation skills using WeasyPrint + Jinja2.
-Generates professional PDFs from HTML templates.
-Saves to /app/data/documents/ in the user's container.
+PDF generation skills for Lipaira using WeasyPrint and Jinja2.
+Renders professional invoice and report PDFs from HTML templates.
+Supports line-item parsing, tax calculation, and output to /app/data/documents/
+in the user's container. Skills: InvoiceCreateSkill, ReportGenerateSkill.
 """
 import os
 import uuid
