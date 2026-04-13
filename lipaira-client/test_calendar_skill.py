@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Test calendar skill with real Google OAuth."""
+"""
+Test harness for calendar skill with real Google OAuth.
+Verifies CalendarReadSkill and CalendarWriteSkill end-to-end with
+live credentials obtained through the OAuth flow.
+"""
 import os
 import sys
 

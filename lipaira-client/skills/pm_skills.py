@@ -1,5 +1,8 @@
 """
-Project management skills for Notion, Trello, Asana, Monday, Basecamp.
+Project management integration skills for Lipaira.
+Supports Notion, Trello, Asana, Monday, and Basecamp via unified
+BaseSkill interface. Each platform has dedicated classes for listing
+and creating tasks, cards, and projects. Routes through GATEWAY_URL.
 """
 import os
 import requests
