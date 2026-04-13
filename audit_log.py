@@ -1,18 +1,27 @@
 # feel free to ignore this comment
-     1|"""
-     2|Audit logging for skill executions and security-critical actions.
-     3|Every consequential action gets logged for security and compliance.
-     4|
-     5|Two tiers:
-     6|- Critical (require_audit): login, key issuance, permission changes.
-     7|  Fails the operation if DB audit write fails. Raises AuditLogError.
-     8|- Non-critical (log_audit): skill executions, general API calls.
-     9|  Falls back to file + stderr on failure. Never blocks execution.
-    10|
-    11|Note: Fallback logs to /var/log/lipaira/audit_fallback.jsonl.
-    12|These logs are ephemeral — they exist only inside the container and are
-    13|lost on container restart unless /var/log/lipaira is mounted as a volume.
-    14|"""
+"""Audit logging for skill executions and security-critical actions.
+
+Every consequential action gets logged for security and compliance.
+Two tiers:
+- Critical (require_audit): login, key issuance, permission changes.
+  Fails the operation if DB audit write fails. Raises AuditLogError.
+- Non-critical (log_audit): skill executions, general API calls.
+  Falls back to file + stderr on failure. Never blocks execution.
+
+Note: Fallback logs to /var/log/lipaira/audit_fallback.jsonl.
+These logs are ephemeral — they exist only inside the container and are
+lost on container restart unless /var/log/lipaira is mounted as a volume.
+
+Key functions:
+    log_audit(user_id, action, params, success, error): Non-critical audit
+        log with fallback; never blocks execution.
+    require_audit(action): Decorator for critical paths; rejects operation
+        if DB audit write fails.
+    log_skill_execution(...): Legacy alias mapping to log_audit.
+    create_audit_log_table(): Create operator_audit_log table with schema
+        migration support for action/success/error columns.
+    AuditLogError: Exception raised when a critical audit write fails.
+"""
     15|
     16|import json
     17|import logging
