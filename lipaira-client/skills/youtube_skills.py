@@ -1,3 +1,8 @@
+"""
+YouTube Skills
+==============
+Fetch YouTube video transcripts.
+"""
 import re
 from .base import BaseSkill, SkillResult
 
