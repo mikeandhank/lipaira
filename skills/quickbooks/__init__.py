@@ -1,0 +1,1 @@
+"""QuickBooks skills for Lipaira - get customers and invoices."""
