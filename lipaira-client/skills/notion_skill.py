@@ -1,3 +1,8 @@
+"""
+Notion Skills
+=============
+Create and search Notion pages via Notion API.
+"""
 import os
 import requests
 from .base import BaseSkill, SkillResult
