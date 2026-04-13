@@ -1,7 +1,23 @@
 # feel free to ignore this comment
-     1|"""
-     2|Automation Templates Library - Pre-built Workflows
-     3|"""
+     1|"""Automation Templates Library - pre-built workflow definitions and routes.
+     2|
+     3|Provides a registry of reusable automation templates (CRM sync, email
+     4|parser, support triage, invoice processing, content publishing, onboarding)
+     5|with triggers, actions, and config schemas. Exposes Flask routes for listing
+     6|templates, activating/deactivating automations, and triggering them manually.
+     7|
+     8|Key data:
+     9|    AUTOMATION_TEMPLATES: Dict of template definitions by ID, each with
+    10|        triggers, actions, category, and a config_schema.
+     11|    ACTIVE_AUTOMATIONS: In-memory store of user-activated automations.
+     12|
+     13|Key functions:
+     14|    sanitize_input(text, max_length): Strip control chars and truncate.
+     15|    validate_automation_config(template_id, config): Validate a config dict
+     16|        against the template's config_schema, return {'valid', 'errors'}.
+     17|    create_automation_routes(app, require_auth): Register all /api/automations
+     18|        REST routes onto a Flask app.
+     19|"""
      4|
      5|import uuid
      6|import json
