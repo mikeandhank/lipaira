@@ -343,6 +343,92 @@ def create_qa_node(commit_node, workflow):
     return qa_node
 
 
+# ── Fix Queue (Phase 3) ──────────────────────────────────────────────────────
+
+FIX_ASSIGNMENT = {
+    'client':    'BigBadinky',
+    'frontend':  'BigBadinky',
+    'ui':        'BigBadinky',
+}
+
+
+def _assignee_for_file(filename):
+    lower = filename.lower()
+    for prefix, agent in FIX_ASSIGNMENT.items():
+        if prefix in lower:
+            return agent
+    return 'JimboJames'
+
+
+def parse_qa_findings(text):
+    findings = []
+    for line in text.split('\n'):
+        line = line.strip()
+        if not line or line.startswith('#') or line.startswith('RESULT'):
+            continue
+        m = re.match(r'^([a-zA-Z_][a-zA-Z0-9_/]*\.py):([0-9]+)\s+(critical|high|medium|low)\s+(.+)$', line, re.I)
+        if m:
+            findings.append({'file': m.group(1), 'line': int(m.group(2)), 'priority': m.group(3).lower(), 'description': m.group(4)})
+            continue
+        m = re.match(r'^(critical|high|medium|low)\s+(.+)$', line, re.I)
+        if m:
+            findings.append({'file': '', 'line': 0, 'priority': m.group(1).lower(), 'description': m.group(2)})
+    return findings
+
+
+def create_fix_node(finding, qa_node, workflow):
+    existing_ids = {n['id'] for n in workflow['nodes']}
+    base = 'fix_' + qa_node['id'].replace('_qa_', '_fix_')
+    fix_id = base
+    counter = 1
+    while fix_id in existing_ids:
+        fix_id = base + '_alt' + str(counter)
+        counter += 1
+
+    priority = finding.get('priority', 'medium').lower()
+    file_ref = finding.get('file', '')
+    line_ref = finding.get('line', 0)
+    desc = finding.get('description', 'fix QA finding')
+
+    assignee = _assignee_for_file(file_ref) if file_ref else 'JimboJames'
+
+    notes = 'QA finding: ' + desc
+    if file_ref:
+        notes += ' — ' + file_ref + (':' + str(line_ref) if line_ref else '')
+    notes += ' [priority: ' + priority + ']'
+
+    fix_node = {
+        'id': fix_id,
+        'description': 'Fix: ' + desc[:120],
+        'agent_category': 'backend',
+        'assigned_to': assignee,
+        'depends_on': [qa_node['id']],
+        'status': 'pending',
+        'context': {
+            'spec_ref': qa_node.get('context', {}).get('spec_ref', ''),
+            'files': [file_ref] if file_ref else [],
+            'patterns': [],
+            'notes': notes,
+            'qa_finding': finding
+        },
+        'result': None,
+        'error': None,
+        'priority': priority
+    }
+    return fix_node
+
+
+def process_qa_findings(qa_node, findings, workflow):
+    created = []
+    for f in findings:
+        node = create_fix_node(f, qa_node, workflow)
+        workflow['nodes'].append(node)
+        created.append(node)
+        log.info('Fix queued [%s]: %s -> %s (%s)',
+                 f.get('priority', '?'), node['id'], node['assigned_to'], f.get('file', ''))
+    return created
+
+
 # ── Result Event Processor ─────────────────────────────────────────────────────
 def apply_result_event(workflow, agent_name, status, output, node_id=None):
     """
@@ -377,6 +463,13 @@ def apply_result_event(workflow, agent_name, status, output, node_id=None):
             qa_node = create_qa_node(agent_node, workflow)
             workflow['nodes'].append(qa_node)
             log.info('Auto-created QA node: %s depending on %s', qa_node['id'], resolved_node_id)
+
+        # QA result → parse findings and queue fix nodes (Phase 3 fix queue)
+        if agent_node.get('agent_category') == 'qa' and output:
+            findings = parse_qa_findings(output)
+            if findings:
+                created = process_qa_findings(agent_node, findings, workflow)
+                log.info('Fix queue: added %d fix nodes from QA result', len(created))
 
         log.info('RESULT [%s] %s: %s', resolved_node_id, agent_name, status)
 
@@ -423,7 +516,7 @@ def poll_telegram_results():
             continue
 
         thread_id = msg.get('message_thread_id')
-        if thread_id != CREW_THREAD:
+        if thread_id not in (CREW_THREAD, QA_THREAD):
             continue
 
         sender = msg.get('from', {})
