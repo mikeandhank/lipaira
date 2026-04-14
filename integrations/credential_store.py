@@ -20,27 +20,10 @@ logger = logging.getLogger(__name__)
 try:
     from encryption import encrypt_api_key, decrypt_api_key, get_encryption_key
 except ImportError:
-    # Fallback for when encryption module isn't available
-    def encrypt_api_key(key: str) -> str:
-        import base64
-        return base64.b64encode(key.encode()).decode()
-    
-    def decrypt_api_key(encrypted: str) -> str:
-        import base64
-        return base64.b64decode(encrypted.encode()).decode()
-    
-    def get_encryption_key():
-        key = os.environ.get('ENCRYPTION_KEY')
-        if not key:
-            env = os.environ.get('LIPAIRA_ENV', 'development')
-            if env == 'production':
-                raise ValueError("ENCRYPTION_KEY environment variable is required in production")
-            raise ValueError("ENCRYPTION_KEY environment variable must be set")
-        if key == 'dev-key-do-not-use-in-prod':
-            env = os.environ.get('LIPAIRA_ENV', 'development')
-            if env == 'production':
-                raise ValueError("Insecure dev key cannot be used in production")
-        return key
+    raise ImportError(
+        "encryption module is required but not available. "
+        "Credential store cannot use base64 fallback — real encryption is mandatory."
+    )
 
 
 # Provider configuration
