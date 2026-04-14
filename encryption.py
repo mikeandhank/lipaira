@@ -48,7 +48,7 @@ def derive_key(password: str, salt: bytes) -> str:
     Derive a proper encryption key using PBKDF2.
     
     Args:
-        password: The master encryption key (from NEXUSOS_ENCRYPTION_KEY)
+        password: The master encryption key (from LIPAIRA_ENCRYPTION_KEY)
         salt: Must be provided. For user-specific data, derive from user_id:
               salt = hashlib.sha256(f"lipaira-user-{user_id}".encode()).digest()
               For app-wide keys, use a stable app-level salt.
