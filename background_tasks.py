@@ -175,7 +175,7 @@ def _run_workflow_scheduler_loop():
                                     cron = croniter(cron_expr, now)
                                     new_next = cron.get_next(datetime)
                                     
-                                    with get_user_conn() as conn:
+                                    with get_user_conn(user_id=user_id) as conn:
                                         with conn.cursor() as cur:
                                             cur.execute("""
                                                 UPDATE workflows 
