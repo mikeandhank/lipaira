@@ -40,7 +40,7 @@ AGENT_WEBHOOKS = {
     "joey":        "http://172.22.0.2:8104/telegram",
 }
 
-PATROL_INTERVAL  = 30   # seconds between workflow polls
+PATROL_INTERVAL  = 10   # seconds between workflow polls
 TELEGRAM_POLL_INTERVAL = 5  # seconds between Telegram result polls
 RESULT_COOLDOWN  = 10   # seconds before same sender can post another result
 
