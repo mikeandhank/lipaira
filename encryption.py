@@ -22,17 +22,17 @@ def get_encryption_key(user_id: str = None) -> str:
                  derived from user_id. If None, uses app-level stable salt.
                  Prefer passing user_id for user-scoped encryption.
     """
-    env = os.environ.get('NEXUSOS_ENV', 'development')
+    env = os.environ.get('LIPAIRA_ENV', 'development')
     
-    key = os.environ.get('NEXUSOS_ENCRYPTION_KEY')
+    key = os.environ.get('LIPAIRA_ENCRYPTION_KEY')
     
     if not key:
         if env == 'production':
-            raise ValueError("NEXUSOS_ENCRYPTION_KEY must be set in production")
+            raise ValueError("LIPAIRA_ENCRYPTION_KEY must be set in production")
         # Development fallback - but warn
         import warnings
-        warnings.warn("Using insecure dev key - set NEXUSOS_ENCRYPTION_KEY for production")
-        key = os.environ.get('NEXUSOS_SECRET_KEY', 'dev-key-do-not-use-in-prod')
+        warnings.warn("Using insecure dev key - set LIPAIRA_ENCRYPTION_KEY for production")
+        key = os.environ.get('LIPAIRA_SECRET_KEY', 'dev-key-do-not-use-in-prod')
     
     # Derive salt: per-user if user_id provided, else app-level stable salt
     if user_id:

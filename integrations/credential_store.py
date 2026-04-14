@@ -32,7 +32,7 @@ except ImportError:
     def get_encryption_key():
         key = os.environ.get('ENCRYPTION_KEY')
         if not key:
-            env = os.environ.get('NEXUSOS_ENV', 'development')
+            env = os.environ.get('LIPAIRA_ENV', 'development')
             if env == 'production':
                 raise ValueError("ENCRYPTION_KEY environment variable is required in production")
             import warnings
