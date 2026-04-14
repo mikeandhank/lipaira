@@ -78,7 +78,7 @@ def tg_send_message(text, chat_id=GROUP_CHAT_ID, thread_id=None):
     if not TG_BASE:
         log.warning(f"TG not configured, would send: {text[:80]}")
         return
-    payload = {"chat_id": chat_id, "text": text, "parse_mode": None}
+    payload = {"chat_id": chat_id, "text": text}
     if thread_id:
         payload["message_thread_id"] = thread_id
     try:
