@@ -46,28 +46,26 @@ integrations_bp = Blueprint('integrations', __name__, url_prefix='/api/integrati
 # =========================================================================
 
 def require_integration_auth(f):
-    """Decorator to ensure user is authenticated."""
+    """Decorator to ensure user is authenticated via API key.
+    
+    SECURITY: user_id is NEVER read from query params or request body.
+    Authentication is only derived from validated API key.
+    """
     from functools import wraps
     @wraps(f)
     def decorated(*args, **kwargs):
-        # First check for user_id in query params
-        user_id = request.args.get('user_id')
-        if user_id:
-            g.user_id = user_id
-            return f(*args, **kwargs)
-        
-        if not hasattr(g, 'user_id') or not g.user_id:
-            # Check for API key
-            auth_header = request.headers.get('Authorization', '')
-            if auth_header.startswith('Bearer '):
-                # Use server_full's validate_api_key_from_key
-                user_id = validate_api_key_from_key(auth_header[7:])
-                if user_id:
-                    g.user_id = user_id
-                else:
-                    return jsonify({'error': 'Invalid API key'}), 401
+        # user_id must come from authenticated source only - NEVER from query params
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            # Validate API key from Bearer token
+            user_id = validate_api_key_from_key(auth_header[7:])
+            if user_id:
+                g.user_id = user_id
             else:
-                return jsonify({'error': 'Unauthorized'}), 401
+                return jsonify({'error': 'Invalid API key'}), 401
+        else:
+            return jsonify({'error': 'Unauthorized - API key required'}), 401
+        
         return f(*args, **kwargs)
     return decorated
 
