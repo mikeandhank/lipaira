@@ -1042,10 +1042,10 @@ def require_auth(f):
                 conn.close()
                 return jsonify({'error': 'Invalid API key'}), 401
             
-            # Update last used - match any of the possible key formats
+            # Update last used - hash both forms before comparing to key_hash column
             cursor.execute(
-                "UPDATE api_keys SET last_used = %s WHERE (key_hash = %s OR key_hash = %s OR key_hash = %s OR key_hash = %s)",
-                (datetime.now().isoformat(), key_hash, key_hash_part, api_key, key_part)
+                "UPDATE api_keys SET last_used = %s WHERE (key_hash = %s OR key_hash = %s)",
+                (datetime.now().isoformat(), key_hash, key_hash_part)
             )
             conn.commit()
             conn.close()
