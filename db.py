@@ -50,6 +50,9 @@ def get_db_connection_for_user(user_id: str, tier: str):
             dbname=parsed.path.lstrip("/") or "nexusos",
         )
         schema = f"u{hashlib.md5(user_id.encode()).hexdigest()[:8]}"
+        # Whitelist validation: only allow schemas that match expected pattern
+        if not (schema.startswith('u') and len(schema) == 9 and all(c in '0123456789abcdef' for c in schema[1:])):
+            raise ValueError(f"Invalid schema: {schema}")
         cur = conn.cursor()
         cur.execute(f"SET search_path TO {schema}, public")
         conn.commit()
