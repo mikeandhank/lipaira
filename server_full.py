@@ -983,8 +983,6 @@ def require_auth(f):
             conn = get_db_connection()
             cursor = conn.cursor()
             
-            # Support both hashed and unhashed keys for backward compatibility
-            # Try both: hash of full key, hash of key without prefix, and raw key
             key_hash = hashlib.sha256(api_key.encode()).hexdigest()
             key_part = api_key.replace('sk-nexus-', '').replace('lp-', '')
             key_hash_part = hashlib.sha256(key_part.encode()).hexdigest()
@@ -993,8 +991,8 @@ def require_auth(f):
                 SELECT ak.user_id, u.email, u.credits, u.subscription_tier, u.role
                 FROM api_keys ak
                 JOIN users u ON u.id = ak.user_id
-                WHERE (ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
-            """, (key_hash, key_hash_part, api_key, key_part))
+                WHERE (ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
+            """, (key_hash, key_hash_part))
             
             row = cursor.fetchone()
             
@@ -1002,10 +1000,10 @@ def require_auth(f):
                 conn.close()
                 return jsonify({'error': 'Invalid API key'}), 401
             
-            # Update last used - match any of the possible key formats
+            # Update last used
             cursor.execute(
-                "UPDATE api_keys SET last_used = %s WHERE (key_hash = %s OR key_hash = %s OR key_hash = %s OR key_hash = %s)",
-                (datetime.now().isoformat(), key_hash, key_hash_part, api_key, key_part)
+                "UPDATE api_keys SET last_used = %s WHERE (key_hash = %s OR key_hash = %s)",
+                (datetime.now().isoformat(), key_hash, key_hash_part)
             )
             conn.commit()
             conn.close()
