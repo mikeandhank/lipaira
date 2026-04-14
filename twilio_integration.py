@@ -12,14 +12,10 @@ import psycopg2
 from datetime import datetime
 from flask import jsonify, request, make_response, g
 
-# Twilio credentials - require them to be set
+# Twilio credentials
 TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
 TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
 TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER', '')
-
-# In-memory SMS/Call log (would be DB in production)
-MESSAGES = {}
-CALLS = {}
 
 # Phone number validation regex (E.164 format)
 PHONE_REGEX = re.compile(r'^\+[1-9]\d{1,14}$')
@@ -112,7 +108,7 @@ def create_twilio_routes(app, require_auth):
     @require_auth
     def send_sms():
         """Send an SMS"""
-        if not TWILIO_ACCOUNT_SID:
+        if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
             return jsonify({
                 'error': 'Twilio not configured',
                 'setup': 'Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER'
@@ -125,7 +121,7 @@ def create_twilio_routes(app, require_auth):
         # Validate phone number
         if not validate_phone_number(to_number):
             return jsonify({
-                'error': 'Invalid phone number. Use E.164 format: +1234567890'
+                'error': 'Invalid phone number. Use E.164 format: +123****7890'
             }), 400
         
         if not message:
@@ -134,26 +130,50 @@ def create_twilio_routes(app, require_auth):
         if len(message) > 1600:
             return jsonify({'error': 'Message too long (max 1600 chars)'}), 400
         
-        # In production, this would use twilio library:
-        # from twilio.rest import Client
-        # client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-        # client.messages.create(body=message, from_=TWILIO_PHONE_NUMBER, to=to_number)
+        user_id = g.user_id
         
-        # Store message log
+        # Send via Twilio API
+        from twilio.rest import Client
+        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        twilio_msg = client.messages.create(
+            body=message,
+            from_=TWILIO_PHONE_NUMBER,
+            to=to_number
+        )
+        
         msg_id = str(uuid.uuid4())
-        MESSAGES[msg_id] = {
-            'id': msg_id,
-            'to': to_number,
-            'from': TWILIO_PHONE_NUMBER,
-            'message': message,
-            'status': 'sent',
-            'direction': 'outbound',
-            'created_at': datetime.utcnow().isoformat()
-        }
+        
+        # Store message log in DB
+        try:
+            conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS sms_messages (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    to_number TEXT NOT NULL,
+                    from_number TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    twilio_sid TEXT,
+                    status TEXT DEFAULT 'sent',
+                    direction TEXT DEFAULT 'outbound',
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                INSERT INTO sms_messages (id, user_id, to_number, from_number, message, twilio_sid, status, direction)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (msg_id, user_id, to_number, TWILIO_PHONE_NUMBER, message, twilio_msg.sid, 'sent', 'outbound'))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            # Log but don't fail - Twilio message was sent
+            logger.error(f"Failed to log SMS to DB: {e}")
         
         return jsonify({
             'success': True,
             'message_id': msg_id,
+            'twilio_sid': twilio_msg.sid,
             'to': to_number,
             'status': 'sent'
         })
@@ -162,9 +182,39 @@ def create_twilio_routes(app, require_auth):
     @require_auth
     def list_sms():
         """List SMS messages"""
+        user_id = g.user_id
         limit = request.args.get('limit', 50, type=int)
         limit = min(limit, 100)  # Cap at 100
-        messages = list(MESSAGES.values())[-limit:]
+        
+        try:
+            conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, to_number, from_number, message, twilio_sid, status, direction, created_at
+                FROM sms_messages
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (user_id, limit))
+            rows = cur.fetchall()
+            conn.close()
+            
+            messages = [
+                {
+                    'id': row[0],
+                    'to': row[1],
+                    'from': row[2],
+                    'message': row[3],
+                    'twilio_sid': row[4],
+                    'status': row[5],
+                    'direction': row[6],
+                    'created_at': row[7].isoformat() if row[7] else None
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+        
         return jsonify({'messages': messages})
     
     @app.route('/api/twilio/sms/webhook', methods=['POST'])
@@ -183,21 +233,39 @@ def create_twilio_routes(app, require_auth):
         
         from_number = request.form.get('From', '')
         message_body = request.form.get('Body', '')
+        msg_sid = request.form.get('MessageSid', '')
         
         # Validate incoming phone number
         if not validate_phone_number(from_number):
             from_number = '+' + re.sub(r'\D', '', from_number)
         
         msg_id = str(uuid.uuid4())
-        MESSAGES[msg_id] = {
-            'id': msg_id,
-            'to': TWILIO_PHONE_NUMBER,
-            'from': from_number,
-            'message': message_body,
-            'status': 'received',
-            'direction': 'inbound',
-            'created_at': datetime.utcnow().isoformat()
-        }
+        
+        # Store inbound message in DB
+        try:
+            conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS sms_messages (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    to_number TEXT NOT NULL,
+                    from_number TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    twilio_sid TEXT,
+                    status TEXT DEFAULT 'received',
+                    direction TEXT DEFAULT 'inbound',
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                INSERT INTO sms_messages (id, user_id, to_number, from_number, message, twilio_sid, status, direction)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (msg_id, None, TWILIO_PHONE_NUMBER, from_number, message_body, msg_sid, 'received', 'inbound'))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Failed to log inbound SMS to DB: {e}")
         
         # Return TwiML response
         response = make_response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>')
@@ -222,7 +290,7 @@ def create_twilio_routes(app, require_auth):
     @require_auth
     def initiate_call():
         """Initiate a voice call"""
-        if not TWILIO_ACCOUNT_SID:
+        if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
             return jsonify({'error': 'Twilio not configured'}), 503
         
         data = request.get_json()
@@ -231,21 +299,51 @@ def create_twilio_routes(app, require_auth):
         # Validate phone number
         if not validate_phone_number(to_number):
             return jsonify({
-                'error': 'Invalid phone number. Use E.164 format: +1234567890'
+                'error': 'Invalid phone number. Use E.164 format: +123****7890'
             }), 400
         
+        user_id = g.user_id
+        
+        # Initiate call via Twilio API
+        from twilio.rest import Client
+        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        twilio_call = client.calls.create(
+            to=to_number,
+            from_=TWILIO_PHONE_NUMBER,
+            url='http://twimlets.com/holdmusic?Bucket=com.twilio.music.ambient'
+        )
+        
         call_id = str(uuid.uuid4())
-        CALLS[call_id] = {
-            'id': call_id,
-            'to': to_number,
-            'from': TWILIO_PHONE_NUMBER,
-            'status': 'initiated',
-            'created_at': datetime.utcnow().isoformat()
-        }
+        
+        # Store call in DB
+        try:
+            conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS sms_calls (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    to_number TEXT NOT NULL,
+                    from_number TEXT NOT NULL,
+                    twilio_sid TEXT,
+                    status TEXT DEFAULT 'initiated',
+                    direction TEXT DEFAULT 'outbound',
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                INSERT INTO sms_calls (id, user_id, to_number, from_number, twilio_sid, status, direction)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (call_id, user_id, to_number, TWILIO_PHONE_NUMBER, twilio_call.sid, 'initiated', 'outbound'))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Failed to log call to DB: {e}")
         
         return jsonify({
             'success': True,
             'call_id': call_id,
+            'twilio_sid': twilio_call.sid,
             'to': to_number,
             'status': 'initiated'
         })
@@ -254,9 +352,38 @@ def create_twilio_routes(app, require_auth):
     @require_auth
     def list_calls():
         """List calls"""
+        user_id = g.user_id
         limit = request.args.get('limit', 50, type=int)
         limit = min(limit, 100)  # Cap at 100
-        calls = list(CALLS.values())[-limit:]
+        
+        try:
+            conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, to_number, from_number, twilio_sid, status, direction, created_at
+                FROM sms_calls
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (user_id, limit))
+            rows = cur.fetchall()
+            conn.close()
+            
+            calls = [
+                {
+                    'id': row[0],
+                    'to': row[1],
+                    'from': row[2],
+                    'sid': row[3],
+                    'status': row[4],
+                    'direction': row[5],
+                    'created_at': row[6].isoformat() if row[6] else None
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+        
         return jsonify({'calls': calls})
     
     @app.route('/api/twilio/voice/webhook', methods=['POST'])
@@ -273,10 +400,17 @@ def create_twilio_routes(app, require_auth):
         call_sid = request.form.get('CallSid', '')
         call_status = request.form.get('CallStatus', '')
         
-        # Update call status
-        for call in CALLS.values():
-            if call.get('sid') == call_sid:
-                call['status'] = call_status
+        # Update call status in DB
+        try:
+            conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE sms_calls SET status = %s WHERE twilio_sid = %s
+            """, (call_status, call_sid))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Failed to update call status in DB: {e}")
         
         # Return TwiML for voicemail/menu
         response = make_response('''<?xml version="1.0" encoding="UTF-8"?>

@@ -1046,6 +1046,40 @@ def require_admin(f):
     return decorated
 
 
+class _UserWithId:
+    """Lightweight user object with id attribute for OAuth handlers."""
+    def __init__(self, user_id):
+        self.id = user_id
+
+
+def get_user_by_key(api_key: str):
+    """Look up user by API key. Returns _UserWithId or None."""
+    if not api_key:
+        return None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        key_part = api_key.replace('sk-nexus-', '').replace('lp-', '')
+        key_hash_part = hashlib.sha256(key_part.encode()).hexdigest()
+        
+        cursor.execute("""
+            SELECT ak.user_id
+            FROM api_keys ak
+            WHERE (ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
+        """, (key_hash, key_hash_part))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return _UserWithId(row[0])
+        return None
+    except Exception:
+        return None
+
+
 # ============================================================================
 # AUTH ENDPOINTS
 # ============================================================================

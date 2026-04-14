@@ -35,9 +35,11 @@ except ImportError:
             env = os.environ.get('LIPAIRA_ENV', 'development')
             if env == 'production':
                 raise ValueError("ENCRYPTION_KEY environment variable is required in production")
-            import warnings
-            warnings.warn("Using insecure dev key fallback — set ENCRYPTION_KEY for production")
-            key = 'dev-key-do-not-use-in-prod'
+            raise ValueError("ENCRYPTION_KEY environment variable must be set")
+        if key == 'dev-key-do-not-use-in-prod':
+            env = os.environ.get('LIPAIRA_ENV', 'development')
+            if env == 'production':
+                raise ValueError("Insecure dev key cannot be used in production")
         return key
 
 

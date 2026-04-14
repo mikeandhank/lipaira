@@ -29,10 +29,11 @@ def get_encryption_key(user_id: str = None) -> str:
     if not key:
         if env == 'production':
             raise ValueError("LIPAIRA_ENCRYPTION_KEY must be set in production")
-        # Development fallback - but warn
-        import warnings
-        warnings.warn("Using insecure dev key - set LIPAIRA_ENCRYPTION_KEY for production")
-        key = os.environ.get('LIPAIRA_SECRET_KEY', 'dev-key-do-not-use-in-prod')
+        raise ValueError("LIPAIRA_ENCRYPTION_KEY environment variable must be set")
+    
+    if key == 'dev-key-do-not-use-in-prod':
+        if env == 'production':
+            raise ValueError("Insecure dev key cannot be used in production")
     
     # Derive salt: per-user if user_id provided, else app-level stable salt
     if user_id:
