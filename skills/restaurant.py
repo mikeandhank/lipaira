@@ -1,11 +1,4 @@
-"""Restaurant reservation skill for Lipaira.
-
-Provides skill for booking restaurant reservations via OpenTable or Resy.
-Per SPEC Item 12 - natural language reservation booking.
-
-Key functions/classes:
-    RestaurantReservationSkill: Parses NL queries, searches availability, confirms reservations
-"""
+"""Restaurant reservation skill - per SPEC Item 12."""
 import os
 import logging
 import json

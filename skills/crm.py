@@ -1,14 +1,5 @@
-"""CRM skills for Lipaira.
-
-Provides skills for interacting with an internal CRM system via lipaira-client.
-These skills manage contacts, deals, pipeline, and tasks without requiring
-external OAuth integration.
-
-Key functions/classes:
-    CRMContactLookupSkill: Search for contacts in the CRM
-    CRMContactCreateSkill: Create new CRM contacts
-    CRMDealCreateSkill: Create new deals in the CRM
-    CRMPipelineSummarySkill: Get pipeline overview and deal summaries
+"""
+CRM skills - wraps lipaira-client version.
 """
 from skills.registry import BaseSkill
 from lipaira_client.skills.crm_skills import (

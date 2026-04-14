@@ -1,13 +1,3 @@
-"""
-Google Calendar skill - read and write calendar events.
-
-Exports:
-- CalendarReadSkill: List upcoming events from Google Calendar
-- CalendarWriteSkill: Create calendar events with attendees
-
-Both skills use the shared google_client.build_service() helper
-to obtain a pre-authenticated Google Calendar API service.
-"""
 import datetime
 from .base import BaseSkill, SkillResult
 from .google_client import build_service

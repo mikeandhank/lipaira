@@ -1,13 +1,4 @@
-"""Email sending skills for Lipaira.
-
-Provides skills for sending and drafting emails:
-- EmailSendSkill: Sends emails via Resend API using Lipaira's API key
-- EmailDraftSkill: Generates email content from templates
-
-Key functions/classes:
-    EmailSendSkill: Sends emails with optional HTML/text body via Resend
-    EmailDraftSkill: Creates email drafts from templates with variable substitution
-"""
+"""Email sending skill via Resend."""
 
 import requests
 from skills.registry import BaseSkill

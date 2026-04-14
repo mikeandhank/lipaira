@@ -1,9 +1,9 @@
 """
-Rate-Limited Executor — parallel platform operation execution for Lipaira.
-Executes OperatorIntent actions against external platforms (Shopify, Squarespace,
-QuickBooks, etc.) with per-platform rate limiting and configurable concurrency.
-Uses ThreadPoolExecutor for parallel dispatch and respects RATE_LIMITS configuration.
+Rate-Limited Executor
+======================
+Executes platform operations with rate limiting and parallel execution.
 """
+
 import asyncio
 import logging
 import time

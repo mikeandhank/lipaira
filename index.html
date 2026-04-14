@@ -1,121 +1,119 @@
-# feel free to ignore this comment
-     1|<!DOCTYPE html>
-     2|<html lang="en">
-     3|<head>
-     4|    <meta charset="UTF-8">
-     5|    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-     6|    <title>Lipaira — AI on Your Server</title>
-     7|    <meta name="description" content="Self-hosted AI agents. Your data. Your server.">
-     8|    
-     9|    <!-- Google Tag Manager -->
-    10|    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    11|    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    12|    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    13|    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    14|    })(window,document,'script','dataLayer','GTM-KDCBVKX4');</script>
-    15|    
-    16|    <style>
-    17|        * { margin: 0; padding: 0; box-sizing: border-box; }
-    18|        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; color: #f8fafc; line-height: 1.5; padding: 20px; }
-    19|        .container { max-width: 800px; margin: 0 auto; }
-    20|        h1 { font-size: clamp(28px, 8vw, 48px); text-align: center; margin: 60px 0 20px; }
-    21|        h1 span { color: #6366f1; }
-    22|        .tagline { font-size: clamp(16px, 4vw, 20px); color: #a1a1aa; text-align: center; margin-bottom: 40px; }
-    23|        .btn { display: inline-block; background: #6366f1; color: #fff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; text-align: center; width: 100%; max-width: 300px; margin: 0 auto; }
-    24|        .section { margin: 50px 0; }
-    25|        h2 { font-size: clamp(22px, 5vw, 28px); margin-bottom: 20px; text-align: center; }
-    26|        .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-    27|        @media (min-width: 600px) { .grid { grid-template-columns: 1fr 1fr; } }
-    28|        .card { background: #141419; border: 1px solid #27272a; border-radius: 12px; padding: 20px; }
-    29|        .card h3 { font-size: 18px; margin-bottom: 8px; }
-    30|        .card p { font-size: 14px; color: #a1a1aa; }
-    31|        .code { background: #141419; border: 1px solid #27272a; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 13px; overflow-x: auto; }
-    32|        .code .c { color: #6b7280; }
-    33|        .privacy { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; text-align: center; margin: 30px 0; }
-    34|        .privacy-item { padding: 12px; }
-    35|        .privacy-item .icon { font-size: 28px; }
-    36|        .privacy-item h4 { font-size: 14px; margin: 8px 0 4px; }
-    37|        .privacy-item p { font-size: 12px; color: #71717a; }
-    38|        footer { text-align: center; padding: 40px 0; color: #71717a; font-size: 14px; border-top: 1px solid #27272a; margin-top: 40px; }
-    39|    </style>
-    40|</head>
-    41|<body>
-    42|    <!-- Google Tag Manager (noscript) -->
-    43|    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KDCBVKX4"
-    44|    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    45|    <!-- End Google Tag Manager (noscript) -->
-    46|    
-    47|    <div class="container">
-    48|        <h1>Your AI lives on<br><span>your server.</span></h1>
-    49|        <p class="tagline">Self-hosted AI agents that remember you, work while you sleep, and never share your data.</p>
-    50|        
-    51|        <a href="#install" class="btn">Get Started</a>
-    52|        
-    53|        <div class="section">
-    54|            <div class="privacy">
-    55|                <div class="privacy-item">
-    56|                    <div class="icon">🏠</div>
-    57|                    <h4>Self-Hosted</h4>
-    58|                    <p>On your VPS</p>
-    59|                </div>
-    60|                <div class="privacy-item">
-    61|                    <div class="icon">🔐</div>
-    62|                    <h4>Zero Knowledge</h4>
-    63|                    <p>We never see your data</p>
-    64|                </div>
-    65|                <div class="privacy-item">
-    66|                    <div class="icon">💳</div>
-    67|                    <h4>We Handle Keys</h4>
-    68|                    <p>Pay for usage</p>
-    69|                </div>
-    70|                <div class="privacy-item">
-    71|                    <div class="icon">🌐</div>
-    72|                    <h4>Local Available</h4>
-    73|                    <p>Ollama option</p>
-    74|                </div>
-    75|            </div>
-    76|        </div>
-    77|        
-    78|        <div class="section">
-    79|            <h2>Why Lipaira?</h2>
-    80|            <div class="grid">
-    81|                <div class="card">
-    82|                    <h3>🧠 It Remembers You</h3>
-    83|                    <p>Persistent memory. Knows your clients, preferences, style.</p>
-    84|                </div>
-    85|                <div class="card">
-    86|                    <h3>⚡ Works While You Sleep</h3>
-    87|                    <p>Schedule agents. Process invoices at midnight.</p>
-    88|                </div>
-    89|                <div class="card">
-    90|                    <h3>🤖 Swarm Intelligence</h3>
-    91|                    <p>Multiple agents collaborate on complex tasks.</p>
-    92|                </div>
-    93|                <div class="card">
-    94|                    <h3>💰 Pay for Use</h3>
-    95|                    <p>Configure quality vs cost. No surprises.</p>
-    96|                </div>
-    97|            </div>
-    98|        </div>
-    99|        
-   100|        <div class="section" id="install">
-   101|            <h2>Install</h2>
-   102|            <div class="code">
-   103|                docker run -d -p 8080:8080 nexusos:latest<br>
-   104|                <span class="c"># Then open http://your-server:8080</span>
-   105|            </div>
-   106|        </div>
-   107|        
-   108|        <div class="section" style="text-align: center;">
-   109|            <h2>Ready?</h2>
-   110|            <p style="color: #a1a1aa; margin-bottom: 20px;">Your AI. Your data. Your server.</p>
-   111|            <a href="#" onclick="navigator.clipboard.writeText('docker run -d -p 8080:8080 nexusos:latest'); alert('Copied!'); return false;" class="btn">Copy Install Command</a>
-   112|        </div>
-   113|        
-   114|        <footer>
-   115|            <p>Built on OpenClaw • Self-hosted • Privacy-first</p>
-   116|        </footer>
-   117|    </div>
-   118|</body>
-   119|</html>
-   120|
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Lipaira — AI on Your Server</title>
+    <meta name="description" content="Self-hosted AI agents. Your data. Your server.">
+    
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-KDCBVKX4');</script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; color: #f8fafc; line-height: 1.5; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 { font-size: clamp(28px, 8vw, 48px); text-align: center; margin: 60px 0 20px; }
+        h1 span { color: #6366f1; }
+        .tagline { font-size: clamp(16px, 4vw, 20px); color: #a1a1aa; text-align: center; margin-bottom: 40px; }
+        .btn { display: inline-block; background: #6366f1; color: #fff; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; text-align: center; width: 100%; max-width: 300px; margin: 0 auto; }
+        .section { margin: 50px 0; }
+        h2 { font-size: clamp(22px, 5vw, 28px); margin-bottom: 20px; text-align: center; }
+        .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+        @media (min-width: 600px) { .grid { grid-template-columns: 1fr 1fr; } }
+        .card { background: #141419; border: 1px solid #27272a; border-radius: 12px; padding: 20px; }
+        .card h3 { font-size: 18px; margin-bottom: 8px; }
+        .card p { font-size: 14px; color: #a1a1aa; }
+        .code { background: #141419; border: 1px solid #27272a; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 13px; overflow-x: auto; }
+        .code .c { color: #6b7280; }
+        .privacy { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; text-align: center; margin: 30px 0; }
+        .privacy-item { padding: 12px; }
+        .privacy-item .icon { font-size: 28px; }
+        .privacy-item h4 { font-size: 14px; margin: 8px 0 4px; }
+        .privacy-item p { font-size: 12px; color: #71717a; }
+        footer { text-align: center; padding: 40px 0; color: #71717a; font-size: 14px; border-top: 1px solid #27272a; margin-top: 40px; }
+    </style>
+</head>
+<body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KDCBVKX4"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
+    
+    <div class="container">
+        <h1>Your AI lives on<br><span>your server.</span></h1>
+        <p class="tagline">Self-hosted AI agents that remember you, work while you sleep, and never share your data.</p>
+        
+        <a href="#install" class="btn">Get Started</a>
+        
+        <div class="section">
+            <div class="privacy">
+                <div class="privacy-item">
+                    <div class="icon">🏠</div>
+                    <h4>Self-Hosted</h4>
+                    <p>On your VPS</p>
+                </div>
+                <div class="privacy-item">
+                    <div class="icon">🔐</div>
+                    <h4>Zero Knowledge</h4>
+                    <p>We never see your data</p>
+                </div>
+                <div class="privacy-item">
+                    <div class="icon">💳</div>
+                    <h4>We Handle Keys</h4>
+                    <p>Pay for usage</p>
+                </div>
+                <div class="privacy-item">
+                    <div class="icon">🌐</div>
+                    <h4>Local Available</h4>
+                    <p>Ollama option</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Why Lipaira?</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>🧠 It Remembers You</h3>
+                    <p>Persistent memory. Knows your clients, preferences, style.</p>
+                </div>
+                <div class="card">
+                    <h3>⚡ Works While You Sleep</h3>
+                    <p>Schedule agents. Process invoices at midnight.</p>
+                </div>
+                <div class="card">
+                    <h3>🤖 Swarm Intelligence</h3>
+                    <p>Multiple agents collaborate on complex tasks.</p>
+                </div>
+                <div class="card">
+                    <h3>💰 Pay for Use</h3>
+                    <p>Configure quality vs cost. No surprises.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section" id="install">
+            <h2>Install</h2>
+            <div class="code">
+                docker run -d -p 8080:8080 nexusos:latest<br>
+                <span class="c"># Then open http://your-server:8080</span>
+            </div>
+        </div>
+        
+        <div class="section" style="text-align: center;">
+            <h2>Ready?</h2>
+            <p style="color: #a1a1aa; margin-bottom: 20px;">Your AI. Your data. Your server.</p>
+            <a href="#" onclick="navigator.clipboard.writeText('docker run -d -p 8080:8080 nexusos:latest'); alert('Copied!'); return false;" class="btn">Copy Install Command</a>
+        </div>
+        
+        <footer>
+            <p>Built on OpenClaw • Self-hosted • Privacy-first</p>
+        </footer>
+    </div>
+</body>
+</html>

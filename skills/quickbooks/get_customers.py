@@ -1,12 +1,4 @@
-"""QuickBooks integration skills for Lipaira.
-
-Provides skills for interacting with QuickBooks.
-Uses QuickBooks OAuth tokens fetched from the database.
-
-Key functions/classes:
-    QuickBooksGetCustomersSkill: Lists customers from QuickBooks (placeholder - not implemented)
-    QuickBooksGetInvoicesSkill: Fetches overdue invoices with client names, amounts, and due dates
-"""
+"""QuickBooks customer skills."""
 
 from skills.registry import BaseSkill
 from skills.base import get_integration_tokens

@@ -1,9 +1,9 @@
 """
-Operator Layer — natural language command execution across integrations.
-Exports IntentParser, RateLimitedExecutor, AuditLogger, and the operator_bp
-Flask blueprint. Coordinates intent parsing → capability resolution →
-rate-limited execution → audit logging for all operator actions.
+Operator Layer
+==============
+Natural language command execution across multiple integrations.
 """
+
 from .intent import (
     IntentParser,
     OperatorIntent,

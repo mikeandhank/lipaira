@@ -1,8 +1,5 @@
 """
-Model Registry — live pricing and model metadata from OpenRouter.
-Caches model list from the OpenRouter API for 1 hour to avoid repeated calls.
-Provides get_models() function returning a list of model dicts with id, pricing,
-context_window, and provider info. Used by the frontend model picker and router.
+Model Registry - Live pricing and model info from OpenRouter
 """
 import os
 import time

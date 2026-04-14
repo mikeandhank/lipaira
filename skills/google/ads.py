@@ -1,10 +1,6 @@
-"""Google Ads integration skills for Lipaira.
-
-Provides skills for interacting with Google Ads API.
-Uses existing Google OAuth connection and GOOGLE_ADS_DEVELOPER_TOKEN.
-
-Key functions/classes:
-    GoogleAdsGetCampaignsSkill: Fetches campaign performance metrics (clicks, impressions, cost, conversions)
+"""
+Google Ads skills for Lipaira.
+Uses existing Google OAuth connection.
 """
 
 from skills.registry import BaseSkill

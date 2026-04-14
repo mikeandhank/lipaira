@@ -1,9 +1,6 @@
 """
-Webhook receiver for Lipaira API server.
-Handles incoming webhook events from Shopify, Squarespace, and GoDaddy platforms.
-Verifies payload signatures per provider, then dispatches to the appropriate
-integration handler (e.g., new order, domain change).
-Blueprint: /api/webhooks
+Webhook Receiver - Handle incoming webhooks from connected platforms
+Supports: Shopify, Squarespace, GoDaddy
 """
 import os
 import hmac

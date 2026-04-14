@@ -1,1 +1,0 @@
-"""Google skills for Lipaira - Gmail, Calendar, Ads, Business Profile."""

@@ -1,14 +1,5 @@
-"""Square integration skills for Lipaira.
-
-Provides skills for interacting with Square APIs:
-- SquareInvoiceCreateSkill: Create invoices in Square
-- SquareCustomerLookupSkill: Search for customers in Square
-- SquareAppointmentListSkill: List upcoming appointments
-
-Key functions/classes:
-    SquareInvoiceCreateSkill: Creates new Square invoices
-    SquareCustomerLookupSkill: Searches Square customers
-    SquareAppointmentListSkill: Lists Square appointments
+"""
+Square integration skills - wraps lipaira-client version.
 """
 from skills.registry import BaseSkill
 from lipaira_client.skills.square_skills import (

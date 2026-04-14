@@ -1,11 +1,4 @@
-"""YouTube integration skill for Lipaira.
-
-Provides skills for interacting with YouTube:
-- YouTubeTranscriptSkill: Get transcripts from YouTube videos
-
-Key functions/classes:
-    YouTubeTranscriptSkill: Fetches and parses transcripts from YouTube videos
-"""
+"""YouTube integration skill."""
 from skills.registry import BaseSkill
 from lipaira_client.skills.youtube_skills import YouTubeTranscriptSkill as _YouTubeTranscriptSkill
 

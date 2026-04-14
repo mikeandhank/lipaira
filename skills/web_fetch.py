@@ -1,12 +1,5 @@
 """
-"""Web fetch skill for Lipaira.
-
-Provides skill for fetching and extracting content from web pages.
-Includes SSRF protection to prevent malicious URL access.
-
-Key functions/classes:
-    WebFetchSkill: Fetches URL content with SSRF protection and content wrapping
-"""
+Web fetch skill - wraps lipaira-client version with SSRF protection.
 """
 from skills.registry import BaseSkill
 from lipaira_client.skills.web_fetch import WebFetchSkill as _WebFetchSkill

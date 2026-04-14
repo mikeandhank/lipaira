@@ -1,12 +1,3 @@
-"""YouTube transcript retrieval skill for Lipaira.
-
-Provides skill for fetching transcripts from YouTube videos.
-Requires yt-dlp and youtube-transcript-api packages.
-
-Key functions/classes:
-    YouTubeTranscriptSkill: Fetches transcript from a YouTube video by URL or video ID
-"""
-
 import re
 import json
 

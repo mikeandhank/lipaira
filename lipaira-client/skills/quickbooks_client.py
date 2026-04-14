@@ -1,8 +1,5 @@
 """
-Shared HTTP client helpers for all QuickBooks skills.
-Provides qb_get, qb_post, and qb_query functions that route through
-GATEWAY_URL's /api/internal/quickbooks-credentials endpoint to obtain
-fresh OAuth tokens on each request, avoiding token refresh complexity.
+Shared helper for all QuickBooks skills.
 """
 import os
 import requests

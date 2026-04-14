@@ -1,12 +1,3 @@
-"""
-Email sending skill via Resend API.
-
-Exports:
-- EmailSendSkill: Send transactional emails (invoices, follow-ups,
-  client communications) using the Resend email API.
-
-Requires RESEND_API_KEY and optionally RESEND_FROM_EMAIL environment variables.
-"""
 import os
 import requests
 from .base import BaseSkill, SkillResult

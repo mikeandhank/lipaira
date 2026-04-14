@@ -1,11 +1,6 @@
-"""Trello skills for Lipaira.
-
-Provides skills for interacting with Trello boards using OAuth 1.0a.
-Note: Trello uses OAuth 1.0a (different from OAuth 2.0 used by most other providers).
-
-Key functions/classes:
-    TrelloGetCardsSkill: Fetches cards from a board with name, description, due date
-    TrelloCreateCardSkill: Creates new cards in a specified Trello list
+"""
+Trello skills for Lipaira.
+Note: Trello uses OAuth 1.0a (different from OAuth 2.0).
 """
 
 import requests

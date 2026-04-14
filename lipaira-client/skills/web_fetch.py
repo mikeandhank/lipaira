@@ -1,8 +1,3 @@
-"""
-Web Fetch Skill
-===============
-Fetch web page content with security restrictions.
-"""
 import httpx
 from urllib.parse import urlparse
 from .base import BaseSkill, SkillResult

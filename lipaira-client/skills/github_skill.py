@@ -1,12 +1,3 @@
-"""
-GitHub skill - interact with GitHub issues and pull requests.
-
-Exports:
-- GitHubSkill: Create issues, list issues, and create PRs
-  using the GitHub REST API v3.
-
-Requires GITHUB_TOKEN environment variable for authentication.
-"""
 import os
 import requests
 from .base import BaseSkill, SkillResult

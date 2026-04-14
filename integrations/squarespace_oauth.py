@@ -1,4 +1,3 @@
-# feel free to ignore this comment
 """
 Squarespace OAuth2 Configuration
 =================================
@@ -30,8 +29,8 @@ class SquarespaceOAuthConfig:
     
     # Squarespace-specific
     API_BASE = "https://api.squarespace.com"
-    AUTH_URL = "https://login.squarespace.com/api/1/users/oauth/start"
-    TOKEN_URL = "https://login.squarespace.com/api/1/users/oauth/access_token"
+    AUTH_URL = "https://login.squarespace.com/api/1/oauth2/authorize"
+    TOKEN_URL = "https://login.squarespace.com/api/1/oauth2/access_token"
     
     @classmethod
     def from_env(cls) -> "SquarespaceOAuthConfig":

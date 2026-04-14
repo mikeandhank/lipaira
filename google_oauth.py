@@ -1,523 +1,816 @@
-# feel free to ignore this comment
-     1|"""Google OAuth integration for Lipaira.
-     2|
-     3|Implements OAuth 2.0 PKCE flow for Google services (Gmail, Calendar,
-     4|Drive, Business Profile). Stores tokens in Redis with state verification,
-     5|persists long-term credentials to PostgreSQL via save_user_integration,
-     6|and triggers background data sweeps after successful auth.
-     7|
-     8|Key constants:
-     9|    GOOGLE_SCOPES: Full list of Google permission scopes.
-     10|    GOOGLE_SERVICE_SCOPES: Granular scopes per service (gmail, calendar, etc.).
-     11|
-     12|Key functions:
-     13|    generate_code_verifier() / generate_code_challenge(verifier): PKCE helpers.
-     14|    get_flow(): Build google_auth_oauthlib Flow object.
-     15|    store_oauth_state(...) / get_oauth_state(state): Redis state management.
-     16|    save_user_integration(...) / get_user_integration(...): Persist/retrieve
-     17|        OAuth tokens to/from PostgreSQL.
-     18|    trigger_all_sweeps(user_id): Fire all per-service sweeps post-auth.
-     19|    sweep_gmail / sweep_google_calendar / sweep_notion: Per-service data
-     20|        ingestion into memory nodes.
-     21|    google_connect(): OAuth initiation endpoint (/auth/google).
-     22|    google_callback(): Token exchange + save + sweep trigger.
-     23|    google_disconnect(): Revoke token and remove integration.
-     24|    google_status(): Return current integration status.
-     25|"""
-     5|import os
-     6|import secrets
-     7|import hashlib
-     8|import base64
-     9|import logging
-    10|import redis
-    11|from flask import Blueprint, request, redirect, jsonify, g, session
-    12|
-    13|logger = logging.getLogger(__name__)
-    14|from google_auth_oauthlib.flow import Flow
-    15|from google.oauth2.credentials import Credentials
-    16|from google.auth.transport.requests import Request as GoogleRequest
-    17|import requests
-    18|
-    19|# Configuration
-    20|GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
-    21|GOOGLE_CLIENT_SECRET=os.env...ET', '')
-    22|GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI', 'https://api.lipaira.ai/api/auth')
-    23|
-    24|GOOGLE_SCOPES = [
-    25|    'https://www.googleapis.com/auth/calendar.events',
-    26|    'https://www.googleapis.com/auth/calendar.readonly',
-    27|    'https://www.googleapis.com/auth/gmail.send',
-    28|    'https://www.googleapis.com/auth/gmail.readonly',
-    29|    'https://www.googleapis.com/auth/drive.file',
-    30|    'https://www.googleapis.com/auth/contacts.readonly',
-    31|    'https://www.googleapis.com/auth/adwords',
-    32|]
-    33|
-    34|# Granular scopes per service
-    35|GOOGLE_SERVICE_SCOPES = {
-    36|    'gmail': [
-    37|        'https://www.googleapis.com/auth/gmail.readonly',
-    38|        'https://www.googleapis.com/auth/gmail.send',
-    39|    ],
-    40|    'google_calendar': [
-    41|        'https://www.googleapis.com/auth/calendar.readonly',
-    42|        'https://www.googleapis.com/auth/calendar.events',
-    43|    ],
-    44|    'google_drive': [
-    45|        'https://www.googleapis.com/auth/drive.readonly',
-    46|        'https://www.googleapis.com/auth/drive.file',
-    47|    ],
-    48|    'google_business': [
-    49|        'https://www.googleapis.com/auth/business.manage',
-    50|    ],
-    51|}
-    52|
-    53|# Redis client
-    54|redis_client = redis.Redis(
-    55|    host=os.environ.get('REDIS_HOST', 'redis'),
-    56|    port=int(os.environ.get('REDIS_PORT', 6379)),
-    57|    password=os.environ.get('REDIS_PASSWORD') or None,
-    58|    decode_responses=True
-    59|)
-    60|
-    61|google_bp = Blueprint('google', __name__)
-    62|
-    63|
-    64|def generate_code_verifier():
-    65|    """Generate a random code verifier for PKCE."""
-    66|    return base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b'=').decode()
-    67|
-    68|
-    69|def generate_code_challenge(verifier):
-    70|    """Generate code challenge from verifier."""
-    71|    digest = hashlib.sha256(verifier.encode()).digest()
-    72|    return base64.urlsafe_b64encode(digest).rstrip(b'=').decode()
-    73|
-    74|
-    75|def get_flow():
-    76|    """Create OAuth flow."""
-    77|    config = {
-    78|        "web": {
-    79|            "client_id": GOOGLE_CLIENT_ID,
-    80|            "client_secret": GOOGLE_CLIENT_SECRET,
-    81|            "redirect_uris": [GOOGLE_REDIRECT_URI],
-    82|            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    83|            "token_uri": "https://oauth2.googleapis.com/token"
-    84|        }
-    85|    }
-    86|    flow = Flow.from_client_config(config, scopes=GOOGLE_SCOPES)
-    87|    flow.redirect_uri = GOOGLE_REDIRECT_URI
-    88|    return flow
-    89|
-    90|
-    91|# ── Redis state helpers ──────────────────────────────────────────────────────
-    92|
-    93|def store_oauth_state(state: str, user_id: str, code_verifier: str = None, ttl: int = 600):
-    94|    """Store state → user_id mapping for 10 minutes."""
-    95|    if code_verifier:
-    96|        redis_client.setex(f"oauth_state:{state}", ttl, f"{user_id}:{code_verifier}")
-    97|    else:
-    98|        redis_client.setex(f"oauth_state:{state}", ttl, user_id)
-    99|
-   100|
-   101|def get_oauth_state(state: str) -> tuple:
-   102|    """Retrieve and delete state (one-time use). Returns (user_id, code_verifier)."""
-   103|    value = redis_client.get(f"oauth_state:{state}")
-   104|    redis_client.delete(f"oauth_state:{state}")
-   105|    
-   106|    if not value:
-   107|        return None, None
-   108|    
-   109|    # Check if code_verifier is stored (format: "user_id:code_verifier")
-   110|    if ':' in value:
-   111|        user_id, code_verifier = value.split(':', 1)
-   112|        return user_id, code_verifier
-   113|    return value, None
-   114|
-   115|
-   116|# ── DB helpers ───────────────────────────────────────────────────────────────
-   117|
-   118|def get_db_connection():
-   119|    import psycopg2
-   120|    db_url = os.environ.get('DATABASE_URL')
-   121|    if not db_url:
-   122|        raise RuntimeError('DATABASE_URL environment variable is required')
-   123|    return psycopg2.connect(db_url)
-   124|
-   125|
-   126|def save_user_integration(user_id, provider, access_token, refresh_token=None, 
-   127|                          expires_at=None, scopes=None, email=None):
-   128|    with get_db_connection() as conn:
-   129|        with conn.cursor() as cur:
-   130|            cur.execute("""
-   131|                INSERT INTO user_integrations
-   132|                (user_id, provider, access_token, refresh_token,
-   133|                 expires_at, scopes, email, updated_at)
-   134|                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
-   135|                ON CONFLICT (user_id, provider) DO UPDATE SET
-   136|                access_token = EXCLUDED.access_token,
-   137|                refresh_token = COALESCE(EXCLUDED.refresh_token, user_integrations.refresh_token),
-   138|                expires_at = EXCLUDED.expires_at,
-   139|                scopes = EXCLUDED.scopes,
-   140|                email = EXCLUDED.email,
-   141|                updated_at = NOW()
-   142|            """, (user_id, provider, access_token, refresh_token,
-   143|                  expires_at, scopes, email))
-   144|            conn.commit()
-   145|
-   146|
-   147|def trigger_all_sweeps(user_id: str):
-   148|    """
-   149|    Run sweeps for all connected integrations for this user.
-   150|    Spawns background thread per integration.
-   151|    """
-   152|    import threading
-   153|    
-   154|    try:
-   155|        conn = get_db_connection()
-   156|        cur = conn.cursor()
-   157|        cur.execute("""
-   158|            SELECT provider FROM user_integrations
-   159|            WHERE user_id = %s AND status = 'connected'
-   160|        """, (user_id,))
-   161|        providers = [row[0] for row in cur.fetchall()]
-   162|        cur.close()
-   163|        conn.close()
-   164|        
-   165|        for provider in providers:
-   166|            threading.Thread(
-   167|                target=trigger_integration_sweep,
-   168|                args=(user_id, provider),
-   169|                daemon=True
-   170|            ).start()
-   171|            logger.info(f"Sweep triggered: {user_id}/{provider}")
-   172|    
-   173|    except Exception as e:
-   174|        logger.error(f"trigger_all_sweeps failed: {e}")
-   175|
-   176|
-   177|def trigger_integration_sweep(user_id: str, provider: str):
-   178|    """
-   179|    Run sweep for a specific integration.
-   180|    Extracts data and stores in memory.
-   181|    """
-   182|    import json
-   183|    from datetime import datetime
-   184|    
-   185|    try:
-   186|        integration = get_user_integration(user_id, provider)
-   187|        if not integration:
-   188|            return
-   189|        
-   190|        access_token = integration.get('access_token')
-   191|        if not access_token:
-   192|            return
-   193|        
-   194|        # Provider-specific sweep logic
-   195|        if provider == 'google_calendar':
-   196|            sweep_google_calendar(user_id)
-   197|        elif provider == 'gmail':
-   198|            sweep_gmail(user_id)
-   199|        elif provider == 'notion':
-   200|            sweep_notion(user_id)
-   201|        
-   202|        logger.info(f"Sweep completed: {user_id}/{provider}")
-   203|    
-   204|    except Exception as e:
-   205|        logger.error(f"Integration sweep failed: {user_id}/{provider}: {e}")
-   206|
-   207|
-   208|def sweep_google_calendar(user_id: str) -> int:
-   209|    """Extract upcoming events and recurring meeting patterns."""
-   210|    from skills.base import get_integration_tokens
-   211|    from datetime import datetime, timezone, timedelta
-   212|    import requests
-   213|    count = 0
-   214|    
-   215|    try:
-   216|        tokens = get_integration_tokens(user_id, None, 'google_calendar')
-   217|        access_token = tokens['access_token']
-   218|        headers = {'Authorization': f'Bearer {access_token}'}
-   219|        
-   220|        now = datetime.now(timezone.utc).isoformat()
-   221|        in_month = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-   222|        
-   223|        resp = requests.get(
-   224|            'https://www.googleapis.com/calendar/v3/calendars/primary/events',
-   225|            headers=headers,
-   226|            params={'timeMin': now, 'timeMax': in_month, 'singleEvents': True, 'orderBy': 'startTime', 'maxResults': 50}
-   227|        )
-   228|        
-   229|        if resp.ok:
-   230|            events = resp.json().get('items', [])
-   231|            if events:
-   232|                upcoming = [f"{e.get('summary', 'Untitled')} on {e.get('start', {}).get('dateTime', '')[:10]}" for e in events[:5]]
-   233|                save_memory_node(user_id, 'fact', f"Upcoming calendar events: {'; '.join(upcoming)}", 0.95, 'google_calendar_sweep')
-   234|                count += 1
-   235|                
-   236|                recurring = [e.get('summary') for e in events if e.get('recurrence') or e.get('recurringEventId')]
-   237|                if recurring:
-   238|                    save_memory_node(user_id, 'fact', f"Recurring meetings: {', '.join(set(recurring[:5]))}", 0.85, 'google_calendar_sweep')
-   239|                    count += 1
-   240|    
-   241|    except Exception as e:
-   242|        logger.warning(f"Calendar sweep failed for {user_id}: {e}")
-   243|    
-   244|    return count
-   245|
-   246|
-   247|def sweep_gmail(user_id: str) -> int:
-   248|    """Extract inbox patterns and top senders from Gmail."""
-   249|    from skills.base import get_integration_tokens
-   250|    import requests
-   251|    count = 0
-   252|    
-   253|    try:
-   254|        tokens = get_integration_tokens(user_id, None, 'gmail')
-   255|        access_token = tokens['access_token']
-   256|        headers = {'Authorization': f'Bearer {access_token}'}
-   257|        
-   258|        resp = requests.get('https://gmail.googleapis.com/gmail/v1/users/me/messages', headers=headers, params={'maxResults': 50, 'q': 'is:inbox'})
-   259|        
-   260|        if resp.ok:
-   261|            messages = resp.json().get('messages', [])
-   262|            
-   263|            senders = {}
-   264|            for msg in messages[:20]:
-   265|                detail = requests.get(f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg["id"]}', headers=headers, params={'format': 'metadata', 'metadataHeaders': ['From', 'Subject']}).json()
-   266|                hdrs = detail.get('payload', {}).get('headers', [])
-   267|                from_val = next((h['value'] for h in hdrs if h['name'] == 'From'), None)
-   268|                if from_val:
-   269|                    senders[from_val] = senders.get(from_val, 0) + 1
-   270|            
-   271|            if senders:
-   272|                top = sorted(senders.items(), key=lambda x: x[1], reverse=True)[:5]
-   273|                top_str = ', '.join(f"{s[0]} ({s[1]} emails)" for s in top)
-   274|                save_memory_node(user_id, 'fact', f"Top Gmail senders: {top_str}", 0.85, 'gmail_sweep')
-   275|                count += 1
-   276|            
-   277|            save_memory_node(user_id, 'fact', f"Gmail inbox: {len(messages)} recent messages", 0.9, 'gmail_sweep')
-   278|            count += 1
-   279|    
-   280|    except Exception as e:
-   281|        logger.warning(f"Gmail sweep failed for {user_id}: {e}")
-   282|    
-   283|    return count
-   284|
-   285|
-   286|def sweep_notion(user_id: str) -> int:
-   287|    """Index all Notion pages and databases."""
-   288|    from skills.base import get_integration_tokens
-   289|    import requests
-   290|    count = 0
-   291|    
-   292|    try:
-   293|        tokens = get_integration_tokens(user_id, None, 'notion')
-   294|        headers = {'Authorization': f"Bearer {tokens['access_token']}", 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json'}
-   295|        
-   296|        resp = requests.post('https://api.notion.com/v1/search', headers=headers, json={'page_size': 50})
-   297|        
-   298|        if resp.ok:
-   299|            results = resp.json().get('results', [])
-   300|            pages = [r for r in results if r['object'] == 'page']
-   301|            dbs = [r for r in results if r['object'] == 'database']
-   302|            
-   303|            if pages:
-   304|                titles = []
-   305|                for p in pages[:10]:
-   306|                    props = p.get('properties', {})
-   307|                    title_prop = props.get('title', {})
-   308|                    title_parts = title_prop.get('title', [])
-   309|                    title = title_parts[0].get('plain_text', 'Untitled') if title_parts else 'Untitled'
-   310|                    titles.append(title)
-   311|                
-   312|                save_memory_node(user_id, 'fact', f"Notion pages ({len(pages)} total): {', '.join(titles)}", 0.85, 'notion_sweep')
-   313|                count += 1
-   314|            
-   315|            if dbs:
-   316|                db_titles = []
-   317|                for d in dbs[:5]:
-   318|                    title_arr = d.get('title', [])
-   319|                    title = title_arr[0].get('plain_text', 'Untitled') if title_arr else 'Untitled'
-   320|                    db_titles.append(title)
-   321|                
-   322|                save_memory_node(user_id, 'fact', f"Notion databases: {', '.join(db_titles)}", 0.85, 'notion_sweep')
-   323|                count += 1
-   324|    
-   325|    except Exception as e:
-   326|        logger.warning(f"Notion sweep failed for {user_id}: {e}")
-   327|    
-   328|    return count
-   329|
-   330|
-   331|def save_memory_node(user_id: str, node_type: str, content: str, confidence: float, source: str):
-   332|    """Save a memory node."""
-   333|    import uuid
-   334|    from datetime import datetime
-   335|    
-   336|    try:
-   337|        conn = get_db_connection()
-   338|        cur = conn.cursor()
-   339|        cur.execute("""
-   340|            INSERT INTO memory_nodes (id, user_id, node_type, content, confidence, source, created_at)
-   341|            VALUES (%s, %s, %s, %s, %s, %s, NOW())
-   342|        """, (str(uuid.uuid4()), user_id, node_type, content, confidence, source))
-   343|        conn.commit()
-   344|        cur.close()
-   345|        conn.close()
-   346|    except Exception as e:
-   347|        logger.error(f"Save memory node failed: {e}")
-   348|
-   349|
-   350|def get_user_integration(user_id, provider):
-   351|    with get_db_connection() as conn:
-   352|        with conn.cursor() as cur:
-   353|            cur.execute("""
-   354|                SELECT * FROM user_integrations
-   355|                WHERE user_id = %s AND provider = %s
-   356|            """, (user_id, provider))
-   357|            return cur.fetchone()
-   358|
-   359|
-   360|def delete_user_integration(user_id, provider):
-   361|    with get_db_connection() as conn:
-   362|        with conn.cursor() as cur:
-   363|            cur.execute("""
-   364|                DELETE FROM user_integrations
-   365|                WHERE user_id = %s AND provider = %s
-   366|            """, (user_id, provider))
-   367|            conn.commit()
-   368|
-   369|
-   370|# ── Routes ───────────────────────────────────────────────────────────────────
-   371|
-   372|@google_bp.route('/api/auth/google/connect')
-   373|def google_connect():
-   374|    """Start OAuth flow."""
-   375|    import hashlib
-   376|    import psycopg2
-   377|    
-   378|    # Try to get user_id from query param, or from API key
-   379|    user_id = request.args.get('user_id', '')
-   380|    
-   381|    if not user_id:
-   382|        # Try to get user from API key
-   383|        api_key = request.args.get('key', '') or request.headers.get('Authorization', '').replace('Bearer ', '')
-   384|        if api_key:
-   385|            try:
-   386|                # Hash the provided API key to match against key_hash
-   387|                key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-   388|                conn = get_db_connection()
-   389|                cur = conn.cursor()
-   390|                # Find user by API key hash
-   391|                cur.execute("""
-   392|                    SELECT user_id FROM api_keys 
-   393|                    WHERE key_hash = %s
-   394|                    LIMIT 1
-   395|                """, (key_hash,))
-   396|                row = cur.fetchone()
-   397|                if row:
-   398|                    user_id = row[0]
-   399|                conn.close()
-   400|            except Exception as e:
-   401|                print(f"OAuth connect error: {e}")
-   402|                pass
-   403|    
-   404|    if not user_id:
-   405|        return jsonify({'error': 'User not identified'}), 400
-   406|    
-   407|    # Generate PKCE code verifier and challenge
-   408|    code_verifier = generate_code_verifier()
-   409|    code_challenge = generate_code_challenge(code_verifier)
-   410|    
-   411|    # Store state with code_verifier
-   412|    state = secrets.token_urlsafe(32)
-   413|    store_oauth_state(state, str(user_id), code_verifier)
-   414|    
-   415|    # Create flow with PKCE
-   416|    flow = get_flow()
-   417|    
-   418|    # Use the code_challenge in authorization_url
-   419|    from urllib.parse import urlencode
-   420|    auth_params = {
-   421|        'state': state,
-   422|        'access_type': 'offline',
-   423|        'prompt': 'consent',
-   424|        'code_challenge': code_challenge,
-   425|        'code_challenge_method': 'S256'
-   426|    }
-   427|    auth_url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(auth_params)}"
-   428|    
-   429|    # Also add client_id and redirect_uri manually since we're not using flow.authorization_url
-   430|    auth_url += f"&client_id={GOOGLE_CLIENT_ID}&redirect_uri={GOOGLE_REDIRECT_URI}&response_type=code"
-   431|    
-   432|    # Add scopes
-   433|    auth_url += "&scope=" + "+".join(GOOGLE_SCOPES)
-   434|    
-   435|    return redirect(auth_url)
-   436|
-   437|
-   438|@google_bp.route('/api/auth/google/callback')
-   439|def google_callback():
-   440|    """Handle OAuth callback."""
-   441|    state = request.args.get('state')
-   442|    code = request.args.get('code')
-   443|    error = request.args.get('error')
-   444|
-   445|    if error:
-   446|        return redirect('https://lipaira.ai/chat?error=google_denied')
-   447|
-   448|    user_id, code_verifier = get_oauth_state(state)
-   449|    if not user_id:
-   450|        return redirect('https://lipaira.ai/chat?error=invalid_state')
-   451|
-   452|    flow = get_flow()
-   453|    
-   454|    # Use the code_verifier when fetching token
-   455|    if code_verifier:
-   456|        flow.fetch_token(
-   457|            code=code,
-   458|            code_verifier=code_verifier
-   459|        )
-   460|    else:
-   461|        flow.fetch_token(code=code)
-   462|    
-   463|    creds = flow.credentials
-   464|
-   465|    # Get user email
-   466|    try:
-   467|        user_info = requests.get(
-   468|            'https://www.googleapis.com/oauth2/v2/userinfo',
-   469|            headers={'Authorization': f'Bearer {creds.token}'}
-   470|        ).json()
-   471|        email = user_info.get('email', '')
-   472|    except:
-   473|        email = ''
-   474|
-   475|    save_user_integration(
-   476|        user_id=user_id,
-   477|        provider='google',
-   478|        access_token=creds.token,
-   479|        refresh_token=creds.refresh_token,
-   480|        expires_at=creds.expiry,
-   481|        scopes=' '.join(GOOGLE_SCOPES),
-   482|        email=email
-   483|    )
-   484|
-   485|    return redirect('https://lipaira.ai/chat?connected=google')
-   486|
-   487|
-   488|@google_bp.route('/api/auth/google/disconnect', methods=['POST'])
-   489|def google_disconnect():
-   490|    """Disconnect Google account."""
-   491|    user_id = request.headers.get('X-User-ID')
-   492|    if not user_id:
-   493|        return jsonify({'error': 'Unauthorized'}), 401
-   494|    
-   495|    delete_user_integration(user_id, 'google')
-   496|    return jsonify({'status': 'disconnected'})
-   497|
-   498|
-   499|@google_bp.route('/api/auth/google/status')
-   500|def google_status():
-   501|
+"""
+Google OAuth integration for Lipaira.
+Add to gateway: from google_oauth import create_google_routes
+"""
+import os
+import secrets
+import hashlib
+import base64
+import logging
+import redis
+from flask import Blueprint, request, redirect, jsonify, g, session
+
+logger = logging.getLogger(__name__)
+from google_auth_oauthlib.flow import Flow
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request as GoogleRequest
+import requests
+
+# Configuration
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI', 'https://api.lipaira.ai/api/auth')
+
+GOOGLE_SCOPES = [
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/drive.file',
+    'https://www.googleapis.com/auth/contacts.readonly',
+    'https://www.googleapis.com/auth/adwords',
+]
+
+# Granular scopes per service
+GOOGLE_SERVICE_SCOPES = {
+    'gmail': [
+        'https://www.googleapis.com/auth/gmail.readonly',
+        'https://www.googleapis.com/auth/gmail.send',
+    ],
+    'google_calendar': [
+        'https://www.googleapis.com/auth/calendar.readonly',
+        'https://www.googleapis.com/auth/calendar.events',
+    ],
+    'google_drive': [
+        'https://www.googleapis.com/auth/drive.readonly',
+        'https://www.googleapis.com/auth/drive.file',
+    ],
+    'google_business': [
+        'https://www.googleapis.com/auth/business.manage',
+    ],
+}
+
+# Redis client
+redis_client = redis.Redis(
+    host=os.environ.get('REDIS_HOST', 'redis'),
+    port=int(os.environ.get('REDIS_PORT', 6379)),
+    password=os.environ.get('REDIS_PASSWORD') or None,
+    decode_responses=True
+)
+
+google_bp = Blueprint('google', __name__)
+
+
+def generate_code_verifier():
+    """Generate a random code verifier for PKCE."""
+    return base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b'=').decode()
+
+
+def generate_code_challenge(verifier):
+    """Generate code challenge from verifier."""
+    digest = hashlib.sha256(verifier.encode()).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b'=').decode()
+
+
+def get_flow():
+    """Create OAuth flow."""
+    config = {
+        "web": {
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uris": [GOOGLE_REDIRECT_URI],
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token"
+        }
+    }
+    flow = Flow.from_client_config(config, scopes=GOOGLE_SCOPES)
+    flow.redirect_uri = GOOGLE_REDIRECT_URI
+    return flow
+
+
+# ── Redis state helpers ──────────────────────────────────────────────────────
+
+def store_oauth_state(state: str, user_id: str, code_verifier: str = None, ttl: int = 600):
+    """Store state → user_id mapping for 10 minutes."""
+    if code_verifier:
+        redis_client.setex(f"oauth_state:{state}", ttl, f"{user_id}:{code_verifier}")
+    else:
+        redis_client.setex(f"oauth_state:{state}", ttl, user_id)
+
+
+def get_oauth_state(state: str) -> tuple:
+    """Retrieve and delete state (one-time use). Returns (user_id, code_verifier)."""
+    value = redis_client.get(f"oauth_state:{state}")
+    redis_client.delete(f"oauth_state:{state}")
+    
+    if not value:
+        return None, None
+    
+    # Check if code_verifier is stored (format: "user_id:code_verifier")
+    if ':' in value:
+        user_id, code_verifier = value.split(':', 1)
+        return user_id, code_verifier
+    return value, None
+
+
+# ── DB helpers ───────────────────────────────────────────────────────────────
+
+def get_db_connection():
+    import psycopg2
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        raise RuntimeError('DATABASE_URL environment variable is required')
+    return psycopg2.connect(db_url)
+
+
+def save_user_integration(user_id, provider, access_token, refresh_token=None, 
+                          expires_at=None, scopes=None, email=None):
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO user_integrations
+                (user_id, provider, access_token, refresh_token,
+                 expires_at, scopes, email, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (user_id, provider) DO UPDATE SET
+                access_token = EXCLUDED.access_token,
+                refresh_token = COALESCE(EXCLUDED.refresh_token, user_integrations.refresh_token),
+                expires_at = EXCLUDED.expires_at,
+                scopes = EXCLUDED.scopes,
+                email = EXCLUDED.email,
+                updated_at = NOW()
+            """, (user_id, provider, access_token, refresh_token,
+                  expires_at, scopes, email))
+            conn.commit()
+
+
+def trigger_all_sweeps(user_id: str):
+    """
+    Run sweeps for all connected integrations for this user.
+    Spawns background thread per integration.
+    """
+    import threading
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT provider FROM user_integrations
+            WHERE user_id = %s AND status = 'connected'
+        """, (user_id,))
+        providers = [row[0] for row in cur.fetchall()]
+        cur.close()
+        conn.close()
+        
+        for provider in providers:
+            threading.Thread(
+                target=trigger_integration_sweep,
+                args=(user_id, provider),
+                daemon=True
+            ).start()
+            logger.info(f"Sweep triggered: {user_id}/{provider}")
+    
+    except Exception as e:
+        logger.error(f"trigger_all_sweeps failed: {e}")
+
+
+def trigger_integration_sweep(user_id: str, provider: str):
+    """
+    Run sweep for a specific integration.
+    Extracts data and stores in memory.
+    """
+    import json
+    from datetime import datetime
+    
+    try:
+        integration = get_user_integration(user_id, provider)
+        if not integration:
+            return
+        
+        access_token = integration.get('access_token')
+        if not access_token:
+            return
+        
+        # Provider-specific sweep logic
+        if provider == 'google_calendar':
+            sweep_google_calendar(user_id)
+        elif provider == 'gmail':
+            sweep_gmail(user_id)
+        elif provider == 'notion':
+            sweep_notion(user_id)
+        
+        logger.info(f"Sweep completed: {user_id}/{provider}")
+    
+    except Exception as e:
+        logger.error(f"Integration sweep failed: {user_id}/{provider}: {e}")
+
+
+def sweep_google_calendar(user_id: str) -> int:
+    """Extract upcoming events and recurring meeting patterns."""
+    from skills.base import get_integration_tokens
+    from datetime import datetime, timezone, timedelta
+    import requests
+    count = 0
+    
+    try:
+        tokens = get_integration_tokens(user_id, None, 'google_calendar')
+        access_token = tokens['access_token']
+        headers = {'Authorization': f'Bearer {access_token}'}
+        
+        now = datetime.now(timezone.utc).isoformat()
+        in_month = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        
+        resp = requests.get(
+            'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+            headers=headers,
+            params={'timeMin': now, 'timeMax': in_month, 'singleEvents': True, 'orderBy': 'startTime', 'maxResults': 50}
+        )
+        
+        if resp.ok:
+            events = resp.json().get('items', [])
+            if events:
+                upcoming = [f"{e.get('summary', 'Untitled')} on {e.get('start', {}).get('dateTime', '')[:10]}" for e in events[:5]]
+                save_memory_node(user_id, 'fact', f"Upcoming calendar events: {'; '.join(upcoming)}", 0.95, 'google_calendar_sweep')
+                count += 1
+                
+                recurring = [e.get('summary') for e in events if e.get('recurrence') or e.get('recurringEventId')]
+                if recurring:
+                    save_memory_node(user_id, 'fact', f"Recurring meetings: {', '.join(set(recurring[:5]))}", 0.85, 'google_calendar_sweep')
+                    count += 1
+    
+    except Exception as e:
+        logger.warning(f"Calendar sweep failed for {user_id}: {e}")
+    
+    return count
+
+
+def sweep_gmail(user_id: str) -> int:
+    """Extract inbox patterns and top senders from Gmail."""
+    from skills.base import get_integration_tokens
+    import requests
+    count = 0
+    
+    try:
+        tokens = get_integration_tokens(user_id, None, 'gmail')
+        access_token = tokens['access_token']
+        headers = {'Authorization': f'Bearer {access_token}'}
+        
+        resp = requests.get('https://gmail.googleapis.com/gmail/v1/users/me/messages', headers=headers, params={'maxResults': 50, 'q': 'is:inbox'})
+        
+        if resp.ok:
+            messages = resp.json().get('messages', [])
+            
+            senders = {}
+            for msg in messages[:20]:
+                detail = requests.get(f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg["id"]}', headers=headers, params={'format': 'metadata', 'metadataHeaders': ['From', 'Subject']}).json()
+                hdrs = detail.get('payload', {}).get('headers', [])
+                from_val = next((h['value'] for h in hdrs if h['name'] == 'From'), None)
+                if from_val:
+                    senders[from_val] = senders.get(from_val, 0) + 1
+            
+            if senders:
+                top = sorted(senders.items(), key=lambda x: x[1], reverse=True)[:5]
+                top_str = ', '.join(f"{s[0]} ({s[1]} emails)" for s in top)
+                save_memory_node(user_id, 'fact', f"Top Gmail senders: {top_str}", 0.85, 'gmail_sweep')
+                count += 1
+            
+            save_memory_node(user_id, 'fact', f"Gmail inbox: {len(messages)} recent messages", 0.9, 'gmail_sweep')
+            count += 1
+    
+    except Exception as e:
+        logger.warning(f"Gmail sweep failed for {user_id}: {e}")
+    
+    return count
+
+
+def sweep_notion(user_id: str) -> int:
+    """Index all Notion pages and databases."""
+    from skills.base import get_integration_tokens
+    import requests
+    count = 0
+    
+    try:
+        tokens = get_integration_tokens(user_id, None, 'notion')
+        headers = {'Authorization': f"Bearer {tokens['access_token']}", 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json'}
+        
+        resp = requests.post('https://api.notion.com/v1/search', headers=headers, json={'page_size': 50})
+        
+        if resp.ok:
+            results = resp.json().get('results', [])
+            pages = [r for r in results if r['object'] == 'page']
+            dbs = [r for r in results if r['object'] == 'database']
+            
+            if pages:
+                titles = []
+                for p in pages[:10]:
+                    props = p.get('properties', {})
+                    title_prop = props.get('title', {})
+                    title_parts = title_prop.get('title', [])
+                    title = title_parts[0].get('plain_text', 'Untitled') if title_parts else 'Untitled'
+                    titles.append(title)
+                
+                save_memory_node(user_id, 'fact', f"Notion pages ({len(pages)} total): {', '.join(titles)}", 0.85, 'notion_sweep')
+                count += 1
+            
+            if dbs:
+                db_titles = []
+                for d in dbs[:5]:
+                    title_arr = d.get('title', [])
+                    title = title_arr[0].get('plain_text', 'Untitled') if title_arr else 'Untitled'
+                    db_titles.append(title)
+                
+                save_memory_node(user_id, 'fact', f"Notion databases: {', '.join(db_titles)}", 0.85, 'notion_sweep')
+                count += 1
+    
+    except Exception as e:
+        logger.warning(f"Notion sweep failed for {user_id}: {e}")
+    
+    return count
+
+
+def save_memory_node(user_id: str, node_type: str, content: str, confidence: float, source: str):
+    """Save a memory node."""
+    import uuid
+    from datetime import datetime
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO memory_nodes (id, user_id, node_type, content, confidence, source, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        """, (str(uuid.uuid4()), user_id, node_type, content, confidence, source))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Save memory node failed: {e}")
+
+
+def get_user_integration(user_id, provider):
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT * FROM user_integrations
+                WHERE user_id = %s AND provider = %s
+            """, (user_id, provider))
+            return cur.fetchone()
+
+
+def delete_user_integration(user_id, provider):
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                DELETE FROM user_integrations
+                WHERE user_id = %s AND provider = %s
+            """, (user_id, provider))
+            conn.commit()
+
+
+# ── Routes ───────────────────────────────────────────────────────────────────
+
+@google_bp.route('/api/auth/google/connect')
+def google_connect():
+    """Start OAuth flow."""
+    import hashlib
+    import psycopg2
+    
+    # Try to get user_id from query param, or from API key
+    user_id = request.args.get('user_id', '')
+    
+    if not user_id:
+        # Try to get user from API key
+        api_key = request.args.get('key', '') or request.headers.get('Authorization', '').replace('Bearer ', '')
+        if api_key:
+            try:
+                # Hash the provided API key to match against key_hash
+                key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+                conn = get_db_connection()
+                cur = conn.cursor()
+                # Find user by API key hash
+                cur.execute("""
+                    SELECT user_id FROM api_keys 
+                    WHERE key_hash = %s
+                    LIMIT 1
+                """, (key_hash,))
+                row = cur.fetchone()
+                if row:
+                    user_id = row[0]
+                conn.close()
+            except Exception as e:
+                print(f"OAuth connect error: {e}")
+                pass
+    
+    if not user_id:
+        return jsonify({'error': 'User not identified'}), 400
+    
+    # Generate PKCE code verifier and challenge
+    code_verifier = generate_code_verifier()
+    code_challenge = generate_code_challenge(code_verifier)
+    
+    # Store state with code_verifier
+    state = secrets.token_urlsafe(32)
+    store_oauth_state(state, str(user_id), code_verifier)
+    
+    # Create flow with PKCE
+    flow = get_flow()
+    
+    # Use the code_challenge in authorization_url
+    from urllib.parse import urlencode
+    auth_params = {
+        'state': state,
+        'access_type': 'offline',
+        'prompt': 'consent',
+        'code_challenge': code_challenge,
+        'code_challenge_method': 'S256'
+    }
+    auth_url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(auth_params)}"
+    
+    # Also add client_id and redirect_uri manually since we're not using flow.authorization_url
+    auth_url += f"&client_id={GOOGLE_CLIENT_ID}&redirect_uri={GOOGLE_REDIRECT_URI}&response_type=code"
+    
+    # Add scopes
+    auth_url += "&scope=" + "+".join(GOOGLE_SCOPES)
+    
+    return redirect(auth_url)
+
+
+@google_bp.route('/api/auth/google/callback')
+def google_callback():
+    """Handle OAuth callback."""
+    state = request.args.get('state')
+    code = request.args.get('code')
+    error = request.args.get('error')
+
+    if error:
+        return redirect('https://lipaira.ai/chat?error=google_denied')
+
+    user_id, code_verifier = get_oauth_state(state)
+    if not user_id:
+        return redirect('https://lipaira.ai/chat?error=invalid_state')
+
+    flow = get_flow()
+    
+    # Use the code_verifier when fetching token
+    if code_verifier:
+        flow.fetch_token(
+            code=code,
+            code_verifier=code_verifier
+        )
+    else:
+        flow.fetch_token(code=code)
+    
+    creds = flow.credentials
+
+    # Get user email
+    try:
+        user_info = requests.get(
+            'https://www.googleapis.com/oauth2/v2/userinfo',
+            headers={'Authorization': f'Bearer {creds.token}'}
+        ).json()
+        email = user_info.get('email', '')
+    except:
+        email = ''
+
+    save_user_integration(
+        user_id=user_id,
+        provider='google',
+        access_token=creds.token,
+        refresh_token=creds.refresh_token,
+        expires_at=creds.expiry,
+        scopes=' '.join(GOOGLE_SCOPES),
+        email=email
+    )
+
+    return redirect('https://lipaira.ai/chat?connected=google')
+
+
+@google_bp.route('/api/auth/google/disconnect', methods=['POST'])
+def google_disconnect():
+    """Disconnect Google account."""
+    user_id = request.headers.get('X-User-ID')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    delete_user_integration(user_id, 'google')
+    return jsonify({'status': 'disconnected'})
+
+
+@google_bp.route('/api/auth/google/status')
+def google_status():
+    """Check Google connection status."""
+    user_id = request.headers.get('X-User-ID')
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    integration = get_user_integration(user_id, 'google')
+    if not integration:
+        return jsonify({'connected': False})
+    
+    return jsonify({
+        'connected': True,
+        'email': integration[7] if len(integration) > 7 else ''
+    })
+
+
+# ── Internal endpoint for agents ───────────────────────────────────────────
+
+@google_bp.route('/api/internal/google-credentials')
+def internal_google_credentials():
+    """Return Google credentials for agent containers.
+    Handles both monolithic 'google' and granular provider rows.
+    """
+    user_id = request.headers.get('X-User-ID')
+    if not user_id:
+        return jsonify({'error': 'No user ID'}), 400
+    
+    # Try monolithic google first, then granular providers
+    integration = None
+    found_provider = None
+    for provider in ['google', 'gmail', 'google_calendar', 'google_drive', 'google_business']:
+        integration = get_user_integration(user_id, provider)
+        if integration:
+            found_provider = provider
+            break
+    
+    if not integration:
+        return jsonify({'error': 'Google not connected'}), 404
+    
+    # user_integrations returns a RealDictRow — use column names
+    # (falls back to index if not dict)
+    def _col(row, name, idx):
+        try:
+            return row[name]
+        except (KeyError, TypeError):
+            return row[idx] if len(row) > idx else None
+    
+    access_token = _col(integration, 'access_token', 3)
+    refresh_token = _col(integration, 'refresh_token', 4)
+    
+    creds = Credentials(
+        token=access_token,
+        refresh_token=refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        scopes=GOOGLE_SCOPES
+    )
+    
+    # Auto-refresh if expired
+    if creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(GoogleRequest())
+            save_user_integration(
+                user_id=user_id,
+                provider=found_provider,
+                access_token=creds.token,
+                refresh_token=creds.refresh_token,
+                expires_at=creds.expiry,
+                scopes=' '.join(GOOGLE_SCOPES)
+            )
+        except Exception as e:
+            logger.warning(f"Token refresh failed in internal_google_credentials: {e}")
+    
+    return jsonify({
+        'token': creds.token,
+        'client_id': GOOGLE_CLIENT_ID,
+        'client_secret': GOOGLE_CLIENT_SECRET,
+        'refresh_token': creds.refresh_token,
+        'scopes': GOOGLE_SCOPES,
+        'provider': found_provider
+    })
+
+
+# ============= GRANULAR GOOGLE SERVICES =============
+
+@google_bp.route('/api/auth/gmail/connect')
+def gmail_connect():
+    """Start Gmail OAuth flow."""
+    return start_granular_oauth('gmail')
+
+
+@google_bp.route('/api/auth/gmail/callback')
+def gmail_callback():
+    """Handle Gmail OAuth callback."""
+    return handle_granular_callback('gmail')
+
+
+@google_bp.route('/api/auth/gmail/status')
+def gmail_status():
+    """Check Gmail status."""
+    return check_granular_status('gmail')
+
+
+@google_bp.route('/api/auth/gmail/disconnect', methods=['POST'])
+def gmail_disconnect():
+    """Disconnect Gmail."""
+    return disconnect_granular('gmail')
+
+
+@google_bp.route('/api/auth/google_calendar/connect')
+def google_calendar_connect():
+    """Start Google Calendar OAuth flow."""
+    return start_granular_oauth('google_calendar')
+
+
+@google_bp.route('/api/auth/google_calendar/callback')
+def google_calendar_callback():
+    """Handle Google Calendar OAuth callback."""
+    return handle_granular_callback('google_calendar')
+
+
+@google_bp.route('/api/auth/google_calendar/status')
+def google_calendar_status():
+    """Check Google Calendar status."""
+    return check_granular_status('google_calendar')
+
+
+@google_bp.route('/api/auth/google_calendar/disconnect', methods=['POST'])
+def google_calendar_disconnect():
+    """Disconnect Google Calendar."""
+    return disconnect_granular('google_calendar')
+
+
+@google_bp.route('/api/auth/google_drive/connect')
+def google_drive_connect():
+    """Start Google Drive OAuth flow."""
+    return start_granular_oauth('google_drive')
+
+
+@google_bp.route('/api/auth/google_drive/callback')
+def google_drive_callback():
+    """Handle Google Drive OAuth callback."""
+    return handle_granular_callback('google_drive')
+
+
+@google_bp.route('/api/auth/google_drive/status')
+def google_drive_status():
+    """Check Google Drive status."""
+    return check_granular_status('google_drive')
+
+
+@google_bp.route('/api/auth/google_drive/disconnect', methods=['POST'])
+def google_drive_disconnect():
+    """Disconnect Google Drive."""
+    return disconnect_granular('google_drive')
+
+
+@google_bp.route('/api/auth/google_business/connect')
+def google_business_connect():
+    """Start Google Business OAuth flow."""
+    return start_granular_oauth('google_business')
+
+
+@google_bp.route('/api/auth/google_business/callback')
+def google_business_callback():
+    """Handle Google Business OAuth callback."""
+    return handle_granular_callback('google_business')
+
+
+@google_bp.route('/api/auth/google_business/status')
+def google_business_status():
+    """Check Google Business status."""
+    return check_granular_status('google_business')
+
+
+@google_bp.route('/api/auth/google_business/disconnect', methods=['POST'])
+def google_business_disconnect():
+    """Disconnect Google Business."""
+    return disconnect_granular('google_business')
+
+
+def start_granular_oauth(service):
+    """Start OAuth flow for specific service."""
+    scopes = GOOGLE_SERVICE_SCOPES.get(service, [])
+    if not scopes:
+        return jsonify({'error': f'Unknown service: {service}'}), 400
+    
+    # Get user_id from query param (passed from frontend)
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'user_id required'}), 400
+    
+    # Use service-specific redirect URI
+    redirect_uri = f'https://api.lipaira.ai/api/auth/{service}/callback'
+    
+    code_verifier = generate_code_verifier()
+    code_challenge = generate_code_challenge(code_verifier)
+    
+    # Use proper params dict - state goes HERE only, not appended to URL
+    from urllib.parse import urlencode
+    auth_params = {
+        'client_id': GOOGLE_CLIENT_ID,
+        'redirect_uri': redirect_uri,
+        'response_type': 'code',
+        'scope': ' '.join(scopes),
+        'access_type': 'offline',
+        'prompt': 'consent',
+        'code_challenge': code_challenge,
+        'code_challenge_method': 'S256',
+        'state': f"{user_id}:{service}"  # Include user_id in state
+    }
+    auth_url = 'https://accounts.google.com/o/oauth2/v2/auth?' + urlencode(auth_params)
+    
+    # Store code_verifier in Redis with combined key
+    redis_client.setex(f'google_oauth_state:{user_id}:{service}', 300, code_verifier)
+    
+    return redirect(auth_url)
+
+
+def handle_granular_callback(service):
+    """Handle granular OAuth callback."""
+    try:
+        # Get user_id and service from the state parameter
+        state = request.args.get('state', '')
+        if ':' in state:
+            user_id, svc = state.split(':', 1)
+        else:
+            return redirect('https://lipaira.ai/chat?error=invalid_state')
+        
+        code_verifier = redis_client.get(f'google_oauth_state:{user_id}:{service}')
+        if not code_verifier:
+            return redirect('https://lipaira.ai/chat?error=oauth_timeout')
+        
+        scopes = GOOGLE_SERVICE_SCOPES.get(service, [])
+        redirect_uri = f'https://api.lipaira.ai/api/auth/{service}/callback'
+        
+        client_config = {
+            "web": {
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uris": [redirect_uri],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token"
+            }
+        }
+        
+        flow = Flow.from_client_config(client_config, scopes=scopes)
+        flow.redirect_uri = redirect_uri
+        
+        flow.fetch_token(
+            code=request.args.get('code'),
+            code_verifier=code_verifier
+        )
+        
+        creds = flow.credentials
+        
+        # Get user info
+        try:
+            from googleapiclient.discovery import build
+            user_creds = Credentials(token=creds.token)
+            user_service = build('oauth2', 'v2', credentials=user_creds, cache_discovery=False)
+            user_info = user_service.userinfo().get().execute()
+            email = user_info.get('email')
+        except:
+            email = None
+        
+        # Save to database with service-specific provider
+        save_user_integration(user_id, service, creds.token, creds.refresh_token,
+                            creds.expiry.isoformat() if creds.expiry else None,
+                            ' '.join(scopes), email)
+        
+        # Trigger memory sweeps after OAuth connect
+        trigger_all_sweeps(user_id)
+        
+        redis_client.delete(f'google_oauth_state:{user_id}:{service}')
+        
+        return redirect(f'https://lipaira.ai/chat?connected={service}')
+        
+    except Exception as e:
+        logger.error(f"Granular OAuth callback error: {e}")
+        return redirect(f'https://lipaira.ai/chat?error=oauth_failed')
+
+
+def check_granular_status(service):
+    """Check granular service status."""
+    user_id = request.args.get('user_id') or g.get('user_id') or session.get('user_id')
+    if not user_id:
+        return jsonify({'connected': False, 'error': 'user_id required'})
+    
+    integration = get_user_integration(user_id, service)
+    
+    if not integration:
+        return jsonify({'connected': False, 'service': service})
+    
+    return jsonify({
+        'connected': True,
+        'service': service,
+        'email': integration.get('email'),
+        'expires_at': integration.get('expires_at')
+    })
+
+
+def disconnect_granular(service):
+    """Disconnect granular service."""
+    user_id = request.json.get('user_id') if request.is_json else None
+    user_id = user_id or g.get('user_id') or session.get('user_id')
+    
+    if user_id:
+        delete_user_integration(user_id, service)
+    
+    return jsonify({'status': 'disconnected', 'service': service})
+
+
+def create_google_routes(app):
+    """Register routes with Flask app."""
+    app.register_blueprint(google_bp)

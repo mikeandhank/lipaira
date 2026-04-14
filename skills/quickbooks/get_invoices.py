@@ -1,11 +1,4 @@
-"""QuickBooks invoice retrieval skill for Lipaira.
-
-Provides skill for fetching unpaid invoices from QuickBooks.
-Uses QuickBooks OAuth tokens fetched from the database.
-
-Key functions/classes:
-    QuickBooksGetInvoicesSkill: Fetches overdue invoices with client names, amounts, and days overdue
-"""
+"""QuickBooks get invoices skill."""
 
 import requests
 from datetime import datetime, timedelta

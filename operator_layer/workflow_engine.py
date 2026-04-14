@@ -1,10 +1,13 @@
 """
-Dynamic Workflow Engine — AI-generated multi-step workflow execution for Lipaira.
-Allows the operator to generate custom workflows on-the-fly based on the user's
-connected integrations, stated goals, and historical patterns from memory.
-Workflows are JSON-defined with TriggerType (manual/scheduled/event/condition)
-and StepType (skill/integrations/python/delay/condition/transform). Executed
-by the WorkflowEngine with full state persistence across steps.
+Dynamic Workflow Engine - AI-Generated Workflows
+=================================================
+
+The Operator can generate custom workflows on-the-fly based on:
+1. User's connected integrations (capabilities available)
+2. User's goals/tasks (what they want to accomplish)
+3. Historical patterns from memory
+
+Workflows are defined as JSON schemas and executed by the workflow engine.
 """
 import json
 import logging

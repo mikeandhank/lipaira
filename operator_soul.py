@@ -1,9 +1,9 @@
 """
-OPERATOR_SOUL — Layer 1 of Lipaira's prompt architecture.
-Defines who Lipaira is — static persona, never changes. Provides the identity
-section and working style guidelines injected into every operator prompt.
-Loaded as a multiline string constant at startup.
+OPERATOR_SOUL - Layer 1 of Lipaira's prompt architecture
+
+Who Lipaira is. Static. Never changes.
 """
+
 OPERATOR_SOUL = """
 ## IDENTITY
 

@@ -1,8 +1,3 @@
-"""
-Web Search Skill
-================
-Search the web using DuckDuckGo or other search APIs.
-"""
 import os
 import httpx
 from .base import BaseSkill, SkillResult

@@ -1,10 +1,9 @@
 """
 Enhanced Model Preferences - Per Task Type
-===========================================
-Manages per-user, per-task-type model preferences with level-based defaults.
-Users can set a different preferred model for each TaskType (coding, vision,
-reasoning, etc.) at each slider level (1-5). Persisted to JSON, served via REST.
+=========================================
+Users can set preferred model for EACH task type independently
 """
+
 from enum import Enum
 from typing import List, Dict, Optional
 from dataclasses import dataclass, field

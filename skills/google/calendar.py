@@ -1,11 +1,4 @@
-"""Google Calendar skills for Lipaira.
-
-Provides skills for interacting with Google Calendar API.
-Uses Google OAuth tokens fetched from the database.
-
-Key functions/classes:
-    CalendarGetEventsSkill: Fetches upcoming calendar events within specified days
-"""
+"""Google Calendar skills - real implementation."""
 
 import datetime
 import json

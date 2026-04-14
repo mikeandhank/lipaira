@@ -1,8 +1,5 @@
 """
-QuickBooks Online integration skills for Lipaira.
-Provides skill-based access to QBO entities: invoices, customers, reports,
-and time entries. All API calls are routed through the GATEWAY_URL credential
-endpoint to keep tokens off the client.
+QuickBooks Online skills.
 """
 import os
 from datetime import datetime, timedelta

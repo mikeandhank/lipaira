@@ -1,8 +1,6 @@
 """
-Invoice chase background worker for Lipaira.
-Automatically identifies overdue invoices from QuickBooks and sends follow-up
-email reminders via Resend. Configurable grace period (days_overdue) and dry-run mode.
-Triggered by the scheduler or manually via the operator layer.
+Invoice Chase Worker - Auto-follow up on overdue invoices
+Uses QuickBooks for invoice data + Resend for email delivery
 """
 import os
 import logging

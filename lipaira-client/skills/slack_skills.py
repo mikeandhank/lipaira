@@ -1,7 +1,5 @@
 """
-Slack integration skills for Lipaira client.
-Provides SlackApp-based capabilities: posting to channels, reading channel history,
-and sending direct messages. Routes through GATEWAY_URL for credential management.
+Slack skills for posting messages, reading channels, and sending DMs.
 """
 import os
 import requests

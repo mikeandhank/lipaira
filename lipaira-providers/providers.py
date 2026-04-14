@@ -1,11 +1,9 @@
 """
 Additional LLM Provider Integrations for Lipaira
 ================================================
-Direct provider clients beyond the core set: Mistral, Cohere, DeepSeek, Qwen,
-Microsoft (Azure), Nvidia NIM, Perplexity, ZeroOne (01-ai), Minimax, and Together.
-Each provider implements BaseProvider and provides pricing, API key management,
-and chat completion methods.
+Mistral, Cohere, DeepSeek, Qwen, Microsoft, Nvidia, Perplexity, 01.AI, Minimax
 """
+
 import os
 import requests
 import time

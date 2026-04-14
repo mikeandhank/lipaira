@@ -1,10 +1,5 @@
-"""Web search skill for Lipaira.
-
-Provides skill for performing web searches using Brave Search API.
-Uses credentials stored in the database for API access.
-
-Key functions/classes:
-    WebSearchSkill: Performs Brave web search and returns results with titles, URLs, snippets
+"""
+Web search skill - wraps lipaira-client version.
 """
 from skills.registry import BaseSkill
 from lipaira_client.skills.web_search import WebSearchSkill as _WebSearchSkill

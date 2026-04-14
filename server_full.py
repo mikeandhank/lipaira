@@ -176,8 +176,7 @@ def enforce_https():
     """Redirect HTTP to HTTPS in production."""
     if os.environ.get('NEXUSOS_ENV') == 'production':
         if request.headers.get('X-Forwarded-Proto', 'http') != 'https':
-            from flask import redirect
-            return redirect(request.url.replace('http://', 'https://'), code=302)
+            return jsonify({'error': 'HTTPS required'}), 301
 
 @app.after_request
 def add_security_headers(response):
@@ -441,7 +440,6 @@ JSON:"""
         cur = conn.cursor()
         # Collect node IDs for embedding generation
         stored_nodes = []
-        stored = 0  # Diagnosis: stored was used at line 458 with += but never initialized, causing NameError on successful memory store.
         
         for mem in memories:
             if not isinstance(mem, dict):
@@ -966,42 +964,6 @@ class UsageTracker:
 # API KEY AUTHENTICATION
 # ============================================================================
 
-# Simple user object returned by get_user_by_key
-class _UserByKey:
-    """Lightweight user object for OAuth flows."""
-    def __init__(self, user_id, email=None, credits=None, tier=None, role=None):
-        self.id = user_id
-        self.email = email
-        self.credits = credits
-        self.subscription_tier = tier
-        self.role = role
-
-def get_user_by_key(api_key: str):
-    # Diagnosis: get_user_by_key was called in 5 OAuth connect handlers (zoom, calendly, meta_ads, canva, asana)
-    # but never defined, causing NameError at runtime when users tried to connect integrations.
-    # This function looks up a user by API key from the api_keys table.
-    if not api_key:
-        return None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-        key_part = api_key.replace('sk-nexus-', '').replace('lp-', '')
-        key_hash_part = hashlib.sha256(key_part.encode()).hexdigest()
-        cursor.execute("""
-            SELECT ak.user_id, u.email, u.credits, u.subscription_tier, u.role
-            FROM api_keys ak
-            JOIN users u ON u.id = ak.user_id
-            WHERE (ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
-        """, (key_hash, key_hash_part))
-        row = cursor.fetchone()
-        conn.close()
-        if row:
-            return _UserByKey(row[0], row[1], float(row[2]) if row[2] else 0.0, row[3], row[4])
-        return None
-    except Exception:
-        return None
-
 def require_auth(f):
     """Decorator for API Key authentication."""
     @wraps(f)
@@ -1027,14 +989,12 @@ def require_auth(f):
             key_part = api_key.replace('sk-nexus-', '').replace('lp-', '')
             key_hash_part = hashlib.sha256(key_part.encode()).hexdigest()
             
-            # Diagnosis: The last two OR conditions compared plaintext apikey and keypart against keyhash column,
-            # which can never match since the column stores SHA256 hashes, not plaintext keys.
             cursor.execute("""
                 SELECT ak.user_id, u.email, u.credits, u.subscription_tier, u.role
                 FROM api_keys ak
                 JOIN users u ON u.id = ak.user_id
-                WHERE (ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
-            """, (key_hash, key_hash_part))
+                WHERE (ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
+            """, (key_hash, key_hash_part, api_key, key_part))
             
             row = cursor.fetchone()
             
@@ -1042,10 +1002,10 @@ def require_auth(f):
                 conn.close()
                 return jsonify({'error': 'Invalid API key'}), 401
             
-            # Update last used - hash both forms before comparing to key_hash column
+            # Update last used - match any of the possible key formats
             cursor.execute(
-                "UPDATE api_keys SET last_used = %s WHERE (key_hash = %s OR key_hash = %s)",
-                (datetime.now().isoformat(), key_hash, key_hash_part)
+                "UPDATE api_keys SET last_used = %s WHERE (key_hash = %s OR key_hash = %s OR key_hash = %s OR key_hash = %s)",
+                (datetime.now().isoformat(), key_hash, key_hash_part, api_key, key_part)
             )
             conn.commit()
             conn.close()

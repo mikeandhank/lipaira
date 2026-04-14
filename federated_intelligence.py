@@ -1,14 +1,8 @@
-# feel free to ignore this comment
-"""
-Federated User Intelligence
-===========================
-Anonymized benchmarking for users - disabled until 5+ users opt-in.
-Requires: user_profiles with business_type, location, federated_opt_in.
-
-Contract: Block 4 Item 18
-"""
-
 # federated_intelligence.py - Federated User Intelligence
+#
+# Contract: Block 4 Item 18
+# Anonymized benchmarking for users - disabled until 5+ users opt-in
+# Requires: user_profiles with business_type, location, federated_opt_in
 
 import os
 import json

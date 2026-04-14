@@ -1,4 +1,3 @@
-# feel free to ignore this comment
 """
 Shopify Adapter
 ===============
@@ -498,4 +497,127 @@ class ShopifyAdapter:
                 password=result.password
             )
         except Exception as e:
-            return {"success": False, "error": "DB connection failed: credentials invalid or unreachable"}
+            return {"success": False, "error": f"DB connection failed: {e}"}
+
+        try:
+            # Create table if not exists
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS shopify_products (
+                        id SERIAL PRIMARY KEY,
+                        user_id VARCHAR(255) NOT NULL,
+                        shopify_product_id BIGINT UNIQUE NOT NULL,
+                        title TEXT,
+                        handle TEXT,
+                        vendor TEXT,
+                        product_type TEXT,
+                        status VARCHAR(50),
+                        created_at TIMESTAMP,
+                        updated_at TIMESTAMP,
+                        synced_at TIMESTAMP DEFAULT NOW(),
+                        UNIQUE(user_id, shopify_product_id)
+                    )
+                """)
+                
+                # Create variant table
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS shopify_product_variants (
+                        id SERIAL PRIMARY KEY,
+                        user_id VARCHAR(255) NOT NULL,
+                        shopify_variant_id BIGINT UNIQUE NOT NULL,
+                        shopify_product_id BIGINT NOT NULL,
+                        title VARCHAR(500),
+                        price DECIMAL(10,2),
+                        sku VARCHAR(255),
+                        inventory_item_id BIGINT,
+                        inventory_quantity INTEGER,
+                        created_at TIMESTAMP,
+                        updated_at TIMESTAMP,
+                        synced_at TIMESTAMP DEFAULT NOW(),
+                        UNIQUE(user_id, shopify_variant_id)
+                    )
+                """)
+                conn.commit()
+
+            # Fetch products
+            products = self.list_products(limit=250)
+            
+            if not products:
+                return {"success": True, "message": "No products to sync", "count": 0}
+
+            # Insert products
+            product_rows = []
+            variant_rows = []
+
+            for p in products:
+                product_rows.append((
+                    self.user_id,
+                    p["id"],
+                    p.get("title"),
+                    p.get("handle"),
+                    p.get("vendor"),
+                    p.get("product_type"),
+                    p.get("status"),
+                    p.get("created_at"),
+                    p.get("updated_at"),
+                ))
+
+                for v in p.get("variants", []):
+                    variant_rows.append((
+                        self.user_id,
+                        v["id"],
+                        p["id"],
+                        v.get("title"),
+                        v.get("price"),
+                        v.get("sku"),
+                        v.get("inventory_item_id"),
+                        v.get("inventory_quantity"),
+                        v.get("created_at"),
+                        v.get("updated_at"),
+                    ))
+
+            with conn.cursor() as cur:
+                # Upsert products
+                execute_values("""
+                    INSERT INTO shopify_products 
+                    (user_id, shopify_product_id, title, handle, vendor, product_type, status, created_at, updated_at)
+                    VALUES %s
+                    ON CONFLICT (user_id, shopify_product_id) DO UPDATE SET
+                        title = EXCLUDED.title,
+                        handle = EXCLUDED.handle,
+                        vendor = EXCLUDED.vendor,
+                        product_type = EXCLUDED.product_type,
+                        status = EXCLUDED.status,
+                        updated_at = EXCLUDED.updated_at,
+                        synced_at = NOW()
+                """, product_rows)
+
+                # Upsert variants
+                execute_values("""
+                    INSERT INTO shopify_product_variants
+                    (user_id, shopify_variant_id, shopify_product_id, title, price, sku, 
+                     inventory_item_id, inventory_quantity, created_at, updated_at)
+                    VALUES %s
+                    ON CONFLICT (user_id, shopify_variant_id) DO UPDATE SET
+                        title = EXCLUDED.title,
+                        price = EXCLUDED.price,
+                        sku = EXCLUDED.sku,
+                        inventory_quantity = EXCLUDED.inventory_quantity,
+                        updated_at = EXCLUDED.updated_at,
+                        synced_at = NOW()
+                """, variant_rows)
+
+                conn.commit()
+
+            return {
+                "success": True,
+                "message": f"Synced {len(products)} products and {len(variant_rows)} variants",
+                "products": len(products),
+                "variants": len(variant_rows)
+            }
+
+        except Exception as e:
+            logger.error(f"Shopify sync error: {e}")
+            return {"success": False, "error": str(e)}
+        finally:
+            conn.close()

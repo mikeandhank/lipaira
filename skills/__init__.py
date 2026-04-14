@@ -1,11 +1,4 @@
-"""
-Skill Registry — auto-registers all available skills for Lipaira.
-Dynamically imports and registers skills from subpackages (email, quickbooks,
-google, memory, notion, web, square, slack, discord, github, crm, youtube,
-grocery, restaurant, zoom, calendly, meta, canva, trello, asana) via a
-SkillRegistry singleton. Provides skill_registry.list() for discovery and
-get_skill(name) for retrieval by the operator layer.
-"""
+"""Skill registry - auto-registers all skills."""
 import logging
 
 logger = logging.getLogger(__name__)

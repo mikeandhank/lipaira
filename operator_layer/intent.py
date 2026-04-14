@@ -1,9 +1,9 @@
 """
-Intent Parser — natural language to structured intent for Lipaira operator.
-Uses the LLM (GPT-4o-mini via unified_api) to parse free-text commands into
-OperatorIntent dataclasses with action_type, platform, parameters, risk_level,
-and expected_outcome. The primary classification engine for operator commands.
+Intent Parser
+=============
+Uses LLM to parse natural language commands into structured intents.
 """
+
 import json
 import logging
 import os

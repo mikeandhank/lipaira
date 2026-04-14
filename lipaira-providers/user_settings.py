@@ -1,10 +1,11 @@
 """
-User Settings REST API for Lipaira model preferences.
-Blueprint providing:
-  GET/POST /api/settings/model-preference  - get/set model capability level (1-5)
-  GET /api/models/available                - list models available given configured API keys
-Exposes MODEL_PREFERENCES and SLIDER_CONFIG to the frontend.
+User Settings API - Model Preference
+=====================================
+GET /api/settings/model-preference - Get user's model slider
+POST /api/settings/model-preference - Set user's model slider
+GET /api/models/available - Get available models based on API keys
 """
+
 from flask import Blueprint, jsonify, request
 from .model_preference import (
     CapabilityLevel, 

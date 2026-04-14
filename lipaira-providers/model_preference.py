@@ -1,10 +1,9 @@
 """
-Model Preference Slider - Capability-based Model Selection
-===========================================================
-Provides the 1-5 slider UI concept for model selection. Users pick a capability
-level (FASTEST → SMARTEST) and the system auto-selects the best available model
-from MODEL_PREFERENCES at that tier. MODEL_PREFERENCE_INFO provides display labels.
+Model Preference Slider
+========================
+Users pick capability level, we pick the model
 """
+
 from enum import Enum
 from typing import List, Dict
 from dataclasses import dataclass

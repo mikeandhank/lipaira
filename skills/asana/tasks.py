@@ -1,12 +1,5 @@
-"""Asana integration skills for Lipaira.
-
-Provides skills for interacting with Asana workspaces via the Asana API.
-Each skill fetches OAuth tokens from the database and uses them to
-authenticate requests to Asana's REST API.
-
-Key functions/classes:
-    AsanaGetTasksSkill: Fetches incomplete tasks assigned to the authenticated user
-    AsanaCreateTaskSkill: Creates new tasks in the user's primary Asana workspace
+"""
+Asana skills for Lipaira.
 """
 
 import requests

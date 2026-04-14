@@ -1,4 +1,3 @@
-# feel free to ignore this comment
 """
 db.py — Shared database connection utilities for Lipaira.
 
@@ -52,9 +51,7 @@ def get_db_connection_for_user(user_id: str, tier: str):
         )
         schema = f"u{hashlib.md5(user_id.encode()).hexdigest()[:8]}"
         cur = conn.cursor()
-        # Diagnosis: SET search_path used string interpolation which is SQL injection risk.
-        # Fix: use parameterized query which psycopg2 handles safely for SET statements.
-        cur.execute("SET search_path TO %s, public", (schema,))
+        cur.execute(f"SET search_path TO {schema}, public")
         conn.commit()
         return conn
 

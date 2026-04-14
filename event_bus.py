@@ -1,14 +1,8 @@
-# feel free to ignore this comment
-"""
-Ambient Event Queue
-===================
-Handles external webhooks, internal skill completions, and scheduled triggers.
-Events are persisted to the database and processed within 5 seconds.
-
-Contract: Block 4 Item 16
-"""
-
 # event_bus.py - Ambient Event Queue
+#
+# Contract: Block 4 Item 16
+# Handles external webhooks, internal skill completions, scheduled triggers
+# Events persisted to DB, processed within 5 seconds
 
 import os
 import json

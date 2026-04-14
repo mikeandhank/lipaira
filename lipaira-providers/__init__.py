@@ -1,17 +1,15 @@
 """
 Lipaira Providers Package
 =========================
-Unified LLM provider routing for Lipaira. Replaces OpenRouter with direct
-connections to OpenAI, Anthropic, Google, Mistral, Cohere, DeepSeek, Qwen,
-Microsoft, Nvidia, Perplexity, ZeroOne, Minimax, Ollama, and Together.
+Unified LLM routing - replaces OpenRouter with direct provider connections
 
 Usage:
 ------
-    from lipaira_providers import LipairaRouter
+from lipaira_providers import LipairaRouter
 
-    router = LipairaRouter()
-    response = router.chat([Message(role="user", content="Hello")], "gpt-4o")
-    print(response.content)
+router = LipairaRouter()
+response = router.chat([Message(role="user", content="Hello")], "gpt-4o")
+print(response.content)
 """
 
 # Don't import anything at module level to avoid circular dependencies

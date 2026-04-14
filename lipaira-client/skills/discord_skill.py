@@ -1,12 +1,3 @@
-"""
-Discord skill - send messages via webhooks.
-
-Exports:
-- DiscordSendSkill: Post a message or embed to a Discord channel
-  via an incoming webhook URL.
-
-Uses Discord's webhook API (no bot token required).
-"""
 import os
 import requests
 from .base import BaseSkill, SkillResult

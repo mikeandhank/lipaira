@@ -1,12 +1,4 @@
-"""Gmail skills for Lipaira.
-
-Provides skills for interacting with Gmail API.
-Uses Google OAuth tokens fetched from the database.
-
-Key functions/classes:
-    GmailReadSkill: Reads emails from Gmail inbox with filtering options
-    GmailSendSkill: Sends emails via Gmail from user's account
-"""
+"""Gmail reading skills via Google OAuth."""
 
 import json
 import logging

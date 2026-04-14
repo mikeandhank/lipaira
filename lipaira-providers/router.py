@@ -1,10 +1,10 @@
 """
-LLM Provider Router for Lipaira
-================================
-Unified interface for multiple LLM providers. Replaces OpenRouter with direct
-connections. Provides LipairaRouter class with chat(), chat_with_function_call(),
-and embedding() methods. Routes to the correct provider based on model name.
+Lipaira LLM Provider Integration
+=================================
+Unified interface for multiple LLM providers
+Replaces OpenRouter with direct provider connections
 """
+
 import os
 import requests
 from abc import ABC, abstractmethod

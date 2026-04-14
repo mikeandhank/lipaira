@@ -1,9 +1,4 @@
-"""
-Pattern detection and workflow suggestion engine for Lipaira (SPEC Item 14).
-Detects recurring user activity patterns from the activity_log table over a 30-day
-window. When a pattern repeats MIN_PATTERN_REPEATS times with CONFIDENCE_THRESHOLD
-confidence, suggests an automated workflow to the operator layer.
-"""
+"""Pattern detection and workflow suggestion - per SPEC Item 14."""
 import os
 import json
 import logging

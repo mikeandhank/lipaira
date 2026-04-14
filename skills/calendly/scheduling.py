@@ -1,12 +1,5 @@
-"""Calendly integration skills for Lipaira.
-
-Provides skills for interacting with Calendly's scheduling API.
-Each skill fetches OAuth tokens from the database and uses them to
-authenticate requests to Calendly's REST API.
-
-Key functions/classes:
-    CalendlyGetScheduledEventsSkill: Fetches active/confirmed upcoming events
-    CalendlyGetEventTypesSkill: Retrieves event types with booking URLs
+"""
+Calendly skills for Lipaira.
 """
 
 import requests

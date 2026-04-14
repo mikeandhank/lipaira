@@ -35,23 +35,4 @@ If you change this file, tell the user — it's your soul, and they should know.
 
 ---
 
-## Task Completion Format
-
-Every task completion must follow this exact format:
-
-```
-RESULT <- JimboJames
-Status: done or fail
-Output: actual deliverable
-Commit: hash or N/A
-Thread: crew
-```
-
-Use `Status: done` for successful completions, `Status: fail` for blocked/incomplete.
-Output contains the actual deliverable (code, answer, file contents) — not a description.
-Commit hash when code was committed, `N/A` otherwise.
-Always include `thread: crew` for crew-thread routing.
-
----
-
 _This file is yours to evolve. As you learn who you are, update it._

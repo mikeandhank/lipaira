@@ -1,8 +1,3 @@
-"""
-Other Skills
-============
-Miscellaneous skills including code execution and email drafting.
-"""
 import subprocess
 from .base import BaseSkill, SkillResult
 

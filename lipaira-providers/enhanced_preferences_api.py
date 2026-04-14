@@ -1,11 +1,11 @@
 """
-Enhanced Preferences REST API for Lipaira.
-Flask blueprint providing CRUD endpoints for per-task-type model preferences:
-  GET/POST/PUT /api/settings/preferences
-  GET/POST/PUT /api/settings/preferences/{task_type}
-  GET /api/settings/preferences/schema
-Powered by PreferenceManager from enhanced_preferences.
+Enhanced Preferences API - Per Task Type
+====================================
+GET/POST/PUT /api/settings/preferences - Get/set all task preferences
+GET/POST/PUT /api/settings/preferences/{task_type} - Get/set specific task preference
+GET /api/settings/preferences/schema - Get UI schema
 """
+
 from flask import Blueprint, jsonify, request
 from .enhanced_preferences import (
     PreferenceManager,

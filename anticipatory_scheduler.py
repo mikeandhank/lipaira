@@ -1,14 +1,8 @@
-# feel free to ignore this comment
-"""
-Anticipatory Scheduler
-=====================
-Background loop that scans user data to predict future needs.
-Writes signals to the anticipatory_signals table.
-
-Contract: Block 4 Item 17
-"""
-
 # anticipatory_scheduler.py - Anticipatory Scheduler
+#
+# Contract: Block 4 Item 17
+# Background loop that scans user data to predict future needs
+# Writes signals to anticipatory_signals table
 
 import os
 import json
