@@ -425,7 +425,8 @@ def patrol_loop():
 
         update_agent_task(agent, node["id"], "running")
 
-        ok = fire_task(node)
+        thread_id = QA_THREAD if agent == "patrick" else CREW_THREAD
+        ok = fire_task(node, thread_id=thread_id)
         if not ok:
             node["status"] = "pending"
             update_agent_task(agent, "", "pending")
