@@ -1,7 +1,7 @@
 """
 Lipaira Client CLI
 Connects to Lipaira Server API for LLM access
-Usage: python client_cli.py --key sk-lipaira-xxx --message "Hello"
+Usage: python client_cli.py --key *** --message "Hello"
 """
 
 import os
@@ -18,6 +18,12 @@ class LipairaClient:
     """Client for Lipaira Server API."""
     
     def __init__(self, api_key: str, server_url: str = None):
+        """Initialize the Lipaira client.
+
+        Args:
+            api_key: The API key for authentication with the Lipaira server.
+            server_url: Optional base URL of the server. Defaults to localhost:8080.
+        """
         self.api_key = api_key
         self.server_url = server_url or DEFAULT_SERVER
         self.session = requests.Session()
@@ -27,7 +33,22 @@ class LipairaClient:
         })
     
     def chat(self, message: str, model: str = None, stream: bool = False):
-        """Send a chat message."""
+        """Send a chat message to the LLM.
+
+        Args:
+            message: The user message to send.
+            model: Optional model name to use (defaults to server config).
+            stream: Whether to stream the response (default False).
+
+        Returns:
+            dict: A dictionary with keys:
+                - success (bool): True if request succeeded, False otherwise.
+                - content (str): The response content (on success).
+                - model (str): The model used for the response.
+                - provider (str): The provider that handled the request.
+                - usage (dict): Token usage statistics.
+                - error (str): Error message (on failure).
+        """
         data = {'message': message}
         if model:
             data['model'] = model
@@ -53,32 +74,70 @@ class LipairaClient:
         }
     
     def get_config(self):
-        """Get LLM configuration."""
+        """Get the current LLM configuration.
+
+        Returns:
+            dict: The server configuration including provider and model settings,
+                  or {'error': 'message'} on failure.
+        """
         response = self.session.get(f"{self.server_url}/api/config")
         return response.json() if response.status_code == 200 else {'error': response.text}
     
     def set_config(self, provider: str, model: str):
-        """Update LLM configuration."""
+        """Update the LLM configuration.
+
+        Args:
+            provider: The provider name (e.g., 'openai', 'anthropic').
+            model: The model name to use.
+
+        Returns:
+            dict: The updated configuration on success, or {'error': 'message'} on failure.
+        """
         response = self.session.put(f"{self.server_url}/api/config", json={'provider': provider, 'model': model})
         return response.json() if response.status_code == 200 else {'error': response.text}
     
     def get_models(self):
-        """Get available models."""
+        """Get available models from the server.
+
+        Returns:
+            dict: A dictionary of available models by provider, or {'error': 'message'} on failure.
+        """
         response = self.session.get(f"{self.server_url}/api/models")
         return response.json() if response.status_code == 200 else {'error': response.text}
     
     def get_credits(self):
-        """Get credit balance."""
+        """Get the current credit balance.
+
+        Returns:
+            dict: A dictionary containing 'credits' (float) on success, or {'error': 'message'} on failure.
+        """
         response = self.session.get(f"{self.server_url}/api/credits")
         return response.json() if response.status_code == 200 else {'error': response.text}
     
     def login(self, email: str, password: str):
-        """Login and get API key."""
+        """Login and retrieve an API key.
+
+        Args:
+            email: The user's email address.
+            password: The user's password.
+
+        Returns:
+            dict: A dictionary containing 'api_key' on success, or {'error': 'message'} on failure.
+        """
         response = self.session.post(f"{self.server_url}/api/auth/login", json={'email': email, 'password': password})
         return response.json() if response.status_code == 200 else {'error': response.text}
     
     def register(self, email: str, password: str, name: str = None):
-        """Register new account."""
+        """Register a new account.
+
+        Args:
+            email: The user's email address.
+            password: The desired password.
+            name: Optional display name for the user.
+
+        Returns:
+            dict: A dictionary containing 'api_key' on success, or {'error': 'message'} on failure.
+        """
         data = {'email': email, 'password': password}
         if name:
             data['name'] = name
