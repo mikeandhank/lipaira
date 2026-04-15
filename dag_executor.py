@@ -340,18 +340,32 @@ def format_task_message(node):
     return '\n'.join([l for l in lines if l.split(': ', 1)[-1].strip()])
 
 
-def fire_task(node, thread_id=CREW_THREAD):
-    """Fire a task by posting the formatted TASK message to the crew group via Telegram bot."""
+def fire_task(node, workflow, thread_id=CREW_THREAD):
+    """
+    Fire a task by posting the formatted TASK message to the crew group via Telegram bot.
+
+    Stamps node['fired_at'] and node['status'] = 'running' BEFORE write_workflow(workflow)
+    so the timestamp is persisted and can be used by patrol_loop to detect stale nodes.
+    """
     # Route Patrick's QA tasks to the QA thread
     if (node.get('assigned_to') or '').lower() == 'patrick':
         thread_id = QA_THREAD
     try:
+        # Stamp fired_at BEFORE write_workflow (enables patrol_loop stale-node detection)
+        node['status'] = 'running'
+        node['fired_at'] = datetime.now(timezone.utc).isoformat()
+        write_workflow(workflow)
+
         message = format_task_message(node)
         tg_send_message(message, thread_id=thread_id)
         log.info('FIRE [%s] -> %s: telegram sent', node['id'], node['assigned_to'])
         return True
     except Exception as e:
         log.error('FIRE [%s] failed: %s', node['id'], e)
+        # Revert stamped fields on failure
+        node['status'] = 'pending'
+        node['fired_at'] = None
+        write_workflow(workflow)
         return False
 
 
@@ -533,6 +547,18 @@ def update_agent_task(agent_name, task_id, status):
 
 # ── Main Loop ─────────────────────────────────────────────────────────────────
 def patrol_loop():
+    """
+    Patrol the workflow, fire ready nodes to available agents.
+
+    Each patrol cycle:
+    1. Reset any running node whose fired_at timestamp is older than TIMEOUT
+       seconds (600s default). This catches agents that vanished without
+       sending a RESULT, leaving their node stuck in 'running' forever.
+    2. Ghost guard: scan for a second 'running' entry for the same agent and
+       reset it before assigning new work.
+    3. fire_task() stamps node['fired_at'] and writes workflow BEFORE sending
+       the telegram message, so the timestamp is persisted for future patrols.
+    """
     workflow = read_workflow()
     if not workflow.get('active'):
         log.debug('Workflow not active, skipping patrol')
@@ -583,16 +609,11 @@ def patrol_loop():
             log.debug('Skipping %s — %s already running a task', node['id'], agent)
             continue
 
-        node['status'] = 'running'
-        node['fired_at'] = datetime.now(timezone.utc).isoformat()
-        write_workflow(workflow)
         update_agent_task(agent, node['id'], 'running')
 
-        ok = fire_task(node)
+        ok = fire_task(node, workflow)
         if not ok:
-            node['status'] = 'pending'
             update_agent_task(agent, '', 'pending')
-            write_workflow(workflow)
             log.error('Failed to fire %s to %s', node['id'], agent)
         else:
             fired += 1
