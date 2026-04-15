@@ -23,6 +23,9 @@ class LipairaClient:
         Args:
             api_key: The API key for authentication with the Lipaira server.
             server_url: Optional base URL of the server. Defaults to localhost:8080.
+
+        Returns:
+            None. Initializes instance attributes: api_key, server_url, session.
         """
         self.api_key = api_key
         self.server_url = server_url or DEFAULT_SERVER
@@ -76,6 +79,9 @@ class LipairaClient:
     def get_config(self):
         """Get the current LLM configuration.
 
+        Args:
+            None.
+
         Returns:
             dict: The server configuration including provider and model settings,
                   or {'error': 'message'} on failure.
@@ -99,6 +105,9 @@ class LipairaClient:
     def get_models(self):
         """Get available models from the server.
 
+        Args:
+            None.
+
         Returns:
             dict: A dictionary of available models by provider, or {'error': 'message'} on failure.
         """
@@ -107,6 +116,9 @@ class LipairaClient:
     
     def get_credits(self):
         """Get the current credit balance.
+
+        Args:
+            None.
 
         Returns:
             dict: A dictionary containing 'credits' (float) on success, or {'error': 'message'} on failure.
@@ -162,7 +174,7 @@ def main():
     api_key = args.key or os.environ.get('NEXUS_API_KEY')
     
     if args.register:
-        client = NexusClient('dummy', args.server)
+        client = LipairaClient('dummy', args.server)
         result = client.register(args.register[0], args.register[1])
         if 'error' in result:
             print(f"Error: {result['error']}")
@@ -171,7 +183,7 @@ def main():
         sys.exit(0)
     
     if args.login:
-        client = NexusClient('dummy', args.server)
+        client = LipairaClient('dummy', args.server)
         result = client.login(args.login[0], args.login[1])
         if 'error' in result:
             print(f"Error: {result['error']}")
@@ -183,7 +195,7 @@ def main():
         print("Error: API key required (--key or NEXUS_API_KEY)")
         sys.exit(1)
     
-    client = NexusClient(api_key, args.server)
+    client = LipairaClient(api_key, args.server)
     
     if args.config:
         print(json.dumps(client.get_config(), indent=2))
