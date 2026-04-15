@@ -365,11 +365,19 @@ def fire_task(node, workflow, thread_id=CREW_THREAD):
 
 # ── QA Node Auto-creation ──────────────────────────────────────────────────────
 def create_qa_node(commit_node, workflow):
-    # Deduplication: skip if a QA variant for this commit already exists
+    """
+    Create a QA review node for a backend commit-type node.
+
+    Deduplication: before creating, scans existing nodes for any node where
+    (a) depends_on contains the same source_id, AND
+    (b) node id contains '_qa' or '_alt'
+    If found, returns None to skip creating a duplicate QA node.
+    """
     src_id = commit_node['id']
+    # Deduplication: skip if a QA variant for this commit already exists
     for n in workflow.get('nodes', []):
         deps = n.get('depends_on', [])
-        if src_id in deps and ('_qa_' in n['id'] or '_alt' in n['id']):
+        if src_id in deps and ('_qa' in n['id'] or '_alt' in n['id']):
             log.debug('QA node for %s already exists (%s) — skipping', src_id, n['id'])
             return None
 
@@ -610,7 +618,7 @@ def patrol_loop():
             log.debug('Skipping %s — %s already running a task', node['id'], agent)
             continue
 
-        # Belt-and-suspenders: confirm no other running node for this agent (ghost guard)
+        # ── BUG 1: Ghost node guard — scan ALL running nodes for this agent ─────
         for other in workflow.get('nodes', []):
             if other['id'] != node['id'] and other.get('assigned_to', '').lower() == agent and other['status'] == 'running':
                 log.warning('Ghost node %s for %s detected — resetting', other['id'], agent)
@@ -618,6 +626,7 @@ def patrol_loop():
                 other['assigned_to'] = None
                 other.pop('fired_at', None)
                 update_agent_task(agent, '', 'pending')
+        # ─────────────────────────────────────────────────────────────────────────
 
         update_agent_task(agent, node['id'], 'running')
 
