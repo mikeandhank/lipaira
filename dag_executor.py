@@ -339,12 +339,21 @@ def format_task_message(node):
     return '\n'.join([l for l in lines if l.split(': ', 1)[-1].strip()])
 
 
-def fire_task(node, thread_id=CREW_THREAD):
-    """Fire a task by posting the formatted TASK message to the crew group via Telegram bot."""
+def fire_task(node, workflow, thread_id=CREW_THREAD):
+    """Fire a task by posting the formatted TASK message to the crew group via Telegram bot.
+
+    Stamps node['fired_at'] before writing the workflow to disk so the timestamp
+    is persisted and can be used by patrol_loop to detect stale running nodes.
+    """
     # Route Patrick's QA tasks to the QA thread
     if (node.get('assigned_to') or '').lower() == 'patrick':
         thread_id = QA_THREAD
     try:
+        # Stamp fired_at BEFORE writing workflow (enables patrol_loop stale-node detection)
+        node['fired_at'] = datetime.now(timezone.utc).isoformat()
+        node['status'] = 'running'
+        write_workflow(workflow)
+
         message = format_task_message(node)
         tg_send_message(message, thread_id=thread_id)
         log.info('FIRE [%s] -> %s: telegram sent', node['id'], node['assigned_to'])
@@ -539,6 +548,19 @@ def update_agent_task(agent_name, task_id, status):
 
 # ── Main Loop ─────────────────────────────────────────────────────────────────
 def patrol_loop():
+    """Patrol the workflow, fire ready nodes to available agents.
+
+    Each patrol cycle:
+    1. Reset any running node whose fired_at timestamp is older than TIMEOUT
+       seconds (600s default). This catches agents that vanished without
+       sending a RESULT, leaving their node stuck in 'running' forever.
+    2. Ghost guard: scan for a second 'running' entry for the same agent and
+       reset it before assigning new work.
+    3. Stamp node['fired_at'] in fire_task() BEFORE write_workflow() so the
+       timeout safety net can detect future stalls.
+    """
+    TIMEOUT = 600  # seconds before a running node is considered stale
+
     workflow = read_workflow()
     if not workflow.get('active'):
         log.debug('Workflow not active, skipping patrol')
@@ -549,14 +571,13 @@ def patrol_loop():
     avail_summary = {k: v[1] for k, v in available.items()}
 
     # ── BUG 1: Timeout safety net — reset stale running nodes ─────────────────
-    NODE_TIMEOUT = 600  # seconds
     now = datetime.now(timezone.utc)
     for n in workflow.get('nodes', []):
         if n['status'] == 'running' and 'fired_at' in n:
             try:
                 fired_time = datetime.fromisoformat(n['fired_at'].replace('Z', '+00:00'))
                 age = (now - fired_time).total_seconds()
-                if age > NODE_TIMEOUT:
+                if age > TIMEOUT:
                     log.warning('Running node %s timed out after %ds — reset to pending', n['id'], int(age))
                     n['status'] = 'pending'
                     n['assigned_to'] = None
@@ -598,13 +619,9 @@ def patrol_loop():
                 other.pop('fired_at', None)
                 update_agent_task(agent, '', 'pending')
 
-        # Stamp fired_at BEFORE writing workflow
-        node['fired_at'] = datetime.now(timezone.utc).isoformat()
-        node['status'] = 'running'
-        write_workflow(workflow)
         update_agent_task(agent, node['id'], 'running')
 
-        ok = fire_task(node)
+        ok = fire_task(node, workflow)
         if not ok:
             node['status'] = 'pending'
             update_agent_task(agent, '', 'pending')
