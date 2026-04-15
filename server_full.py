@@ -440,7 +440,8 @@ JSON:"""
         cur = conn.cursor()
         # Collect node IDs for embedding generation
         stored_nodes = []
-        
+        stored = 0
+
         for mem in memories:
             if not isinstance(mem, dict):
                 continue
