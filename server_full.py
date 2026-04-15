@@ -176,7 +176,8 @@ def enforce_https():
     """Redirect HTTP to HTTPS in production."""
     if os.environ.get('NEXUSOS_ENV') == 'production':
         if request.headers.get('X-Forwarded-Proto', 'http') != 'https':
-            return jsonify({'error': 'HTTPS required'}), 301
+            from flask import redirect
+            return redirect(request.url.replace('http://', 'https://'), code=302)
 
 @app.after_request
 def add_security_headers(response):
