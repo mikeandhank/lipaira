@@ -371,8 +371,35 @@ def fire_task(node, workflow, thread_id=CREW_THREAD):
 
 # ── QA Node Auto-creation ──────────────────────────────────────────────────────
 def create_qa_node(commit_node, workflow):
+    """
+    Create a QA review node for a backend commit-type node.
+
+    Args:
+        commit_node: The commit node dict to create a QA node for.
+        workflow: The full workflow dict containing nodes list.
+
+    Returns:
+        A new QA node dict, or None if a QA node for this commit already exists.
+        Deduplication checks for any existing node whose id contains '_qa' or '_alt'
+        AND whose depends_on includes the same source commit_node['id'].
+
+    Deduplication logic: before creating, scans existing nodes for any node where
+        (a) depends_on contains the same source_id, AND
+        (b) node id contains '_qa' or '_alt'
+    If found, returns None to skip creating a duplicate QA node.
+    """
+    src_id = commit_node['id']
+
+    # Deduplication: skip if a QA node for this commit already exists
+    for n in workflow.get('nodes', []):
+        deps = n.get('depends_on', [])
+        if src_id in deps and ('_qa' in n['id'] or '_alt' in n['id']):
+            log.debug('QA node for %s already exists (%s) — skipping', src_id, n['id'])
+            return None
+
     node_id_base = commit_node['id'].replace('_c_', '_qa_')
 
+    # Secondary dedup: avoid ID collision with any existing node
     existing_ids = {n['id'] for n in workflow['nodes']}
     qa_id = node_id_base
     counter = 1
