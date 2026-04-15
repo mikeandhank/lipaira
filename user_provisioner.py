@@ -33,7 +33,7 @@ DEFAULT_MEMORY = "256m"  # Per spec: 256MB for paid tier
 DEFAULT_CPU = 0.25       # Per spec: 0.25 CPU
 
 # Network - use existing lipaira network
-LIPAIRA_NETWORK = "lipaira-net"
+LIPAIRA_NETWORK = "nexusos_lipaira-net"
 
 
 class UserProvisioner:

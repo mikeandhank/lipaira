@@ -1,5 +1,5 @@
 """
-Twilio Integration - SMS and Voice for Lipaira
+Twilio Integration - SMS and Voice for NexusOS
 """
 
 import os
@@ -281,7 +281,7 @@ def create_twilio_routes(app, require_auth):
         # Return TwiML for voicemail/menu
         response = make_response('''<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say>Thank you for calling Lipaira. Leave a message after the tone.</Say>
+    <Say>Thank you for calling NexusOS. Leave a message after the tone.</Say>
     <Record maxLength="60" />
 </Response>''')
         response.headers['Content-Type'] = 'text/xml'

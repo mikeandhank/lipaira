@@ -45,6 +45,7 @@ AGENT_WEBHOOKS = {
 PATROL_INTERVAL       = 10
 TELEGRAM_POLL_INTERVAL = 5
 RESULT_COOLDOWN       = 10
+FIRE_TIMEOUT          = 600  # seconds before a running/firing node is considered stale
 
 RESULT_PATTERN  = re.compile(r'^RESULT\s*<-\s*(\w+)',  re.IGNORECASE | re.MULTILINE)
 BLOCKER_PATTERN = re.compile(r'^BLOCKER\s*<-\s*(\w+)', re.IGNORECASE | re.MULTILINE)
@@ -339,21 +340,12 @@ def format_task_message(node):
     return '\n'.join([l for l in lines if l.split(': ', 1)[-1].strip()])
 
 
-def fire_task(node, workflow, thread_id=CREW_THREAD):
-    """Fire a task by posting the formatted TASK message to the crew group via Telegram bot.
-
-    Stamps node['fired_at'] before writing the workflow to disk so the timestamp
-    is persisted and can be used by patrol_loop to detect stale running nodes.
-    """
+def fire_task(node, thread_id=CREW_THREAD):
+    """Fire a task by posting the formatted TASK message to the crew group via Telegram bot."""
     # Route Patrick's QA tasks to the QA thread
     if (node.get('assigned_to') or '').lower() == 'patrick':
         thread_id = QA_THREAD
     try:
-        # Stamp fired_at BEFORE writing workflow (enables patrol_loop stale-node detection)
-        node['fired_at'] = datetime.now(timezone.utc).isoformat()
-        node['status'] = 'running'
-        write_workflow(workflow)
-
         message = format_task_message(node)
         tg_send_message(message, thread_id=thread_id)
         log.info('FIRE [%s] -> %s: telegram sent', node['id'], node['assigned_to'])
@@ -365,29 +357,6 @@ def fire_task(node, workflow, thread_id=CREW_THREAD):
 
 # ── QA Node Auto-creation ──────────────────────────────────────────────────────
 def create_qa_node(commit_node, workflow):
-    """Create a QA node for a completed commit node.
-
-    Args:
-        commit_node: The backend commit node that just completed.
-                     Its 'id' is used as the depends_on target.
-        workflow: The current workflow dict containing all nodes.
-
-    Returns:
-        A new QA node dict assigned to Patrick, depending on the commit node.
-        Returns None if a QA variant for this commit already exists in the
-        workflow (deduplication: any existing node whose id contains '_qa_'
-        or '_alt' AND whose depends_on includes the commit node's id is
-        taken as a duplicate and skipped).
-    """
-    src_id = commit_node['id']
-
-    # Deduplication: skip if a QA variant for this commit already exists
-    for n in workflow.get('nodes', []):
-        deps = n.get('depends_on', [])
-        if src_id in deps and ('_qa_' in n['id'] or '_alt' in n['id']):
-            log.debug('QA node for %s already exists (%s) — skipping', src_id, n['id'])
-            return None
-
     node_id_base = commit_node['id'].replace('_c_', '_qa_')
 
     existing_ids = {n['id'] for n in workflow['nodes']}
@@ -444,20 +413,21 @@ def apply_result_event(workflow, agent_name, status, output, node_id=None):
     if status in ('done', 'pass'):
         agent_node['status'] = 'done'
         agent_node['result'] = output
+        agent_node['fired_at'] = None
         update_agent_task(agent_name, '', 'done')
 
         # Auto-create QA node for backend commit-type nodes
         if agent_node.get('agent_category') == 'backend':
             qa_node = create_qa_node(agent_node, workflow)
-            if qa_node is not None:
-                workflow['nodes'].append(qa_node)
-                log.info('Auto-created QA node: %s depending on %s', qa_node['id'], resolved_node_id)
+            workflow['nodes'].append(qa_node)
+            log.info('Auto-created QA node: %s depending on %s', qa_node['id'], resolved_node_id)
 
         log.info('RESULT [%s] %s: %s', resolved_node_id, agent_name, status)
 
     else:  # fail / blocker
         agent_node['status'] = 'failed'
         agent_node['error'] = output
+        agent_node['fired_at'] = None
         update_agent_task(agent_name, '', 'failed')
         notify_robert_blocker(agent_name, 'Node ' + resolved_node_id + ' failed: ' + output)
         log.info('FAIL [%s] %s: %s', resolved_node_id, agent_name, output[:80])
@@ -563,46 +533,34 @@ def update_agent_task(agent_name, task_id, status):
 
 # ── Main Loop ─────────────────────────────────────────────────────────────────
 def patrol_loop():
-    """Patrol the workflow, fire ready nodes to available agents.
-
-    Each patrol cycle:
-    1. Reset any running node whose fired_at timestamp is older than TIMEOUT
-       seconds (600s default). This catches agents that vanished without
-       sending a RESULT, leaving their node stuck in 'running' forever.
-    2. Ghost guard: scan for a second 'running' entry for the same agent and
-       reset it before assigning new work.
-    3. Stamp node['fired_at'] in fire_task() BEFORE write_workflow() so the
-       timeout safety net can detect future stalls.
-    """
-    TIMEOUT = 600  # seconds before a running node is considered stale
-
     workflow = read_workflow()
     if not workflow.get('active'):
         log.debug('Workflow not active, skipping patrol')
         return
 
+    # Sweep: reset stale firing/running nodes that lost their agent
+    now_ts = datetime.now(timezone.utc)
+    for node in workflow.get('nodes', []):
+        if node.get('status') in ('firing', 'running'):
+            fired_at_str = node.get('fired_at')
+            if fired_at_str:
+                try:
+                    fired_at = datetime.fromisoformat(fired_at_str.replace('Z', '+00:00'))
+                    age = (now_ts - fired_at).total_seconds()
+                    if age > FIRE_TIMEOUT:
+                        node['status'] = 'pending'
+                        node['fired_at'] = None
+                        log.warning('Stale node %s (%s, age=%ds) reset to pending', node['id'], node.get('status'), int(age))
+                except Exception:
+                    pass
+            else:
+                # No fired_at means it was never properly fired — reset
+                node['status'] = 'pending'
+                log.warning('Node %s has no fired_at, reset to pending', node['id'])
+
     snapshot = memory_snapshot()
     available = who_is_available(snapshot, workflow)
     avail_summary = {k: v[1] for k, v in available.items()}
-
-    # ── BUG 1: Timeout safety net — reset stale running nodes ─────────────────
-    now = datetime.now(timezone.utc)
-    for n in workflow.get('nodes', []):
-        if n['status'] == 'running' and 'fired_at' in n:
-            try:
-                fired_time = datetime.fromisoformat(n['fired_at'].replace('Z', '+00:00'))
-                age = (now - fired_time).total_seconds()
-                if age > TIMEOUT:
-                    log.warning('Running node %s timed out after %ds — reset to pending', n['id'], int(age))
-                    n['status'] = 'pending'
-                    n['assigned_to'] = None
-                    n.pop('fired_at', None)
-                    update_agent_task(n.get('assigned_to', ''), '', 'pending')
-            except Exception as e:
-                log.debug('Could not parse fired_at for %s: %s', n['id'], e)
-    write_workflow(workflow)
-    # ─────────────────────────────────────────────────────────────────────────
-
     ready = find_ready_nodes(workflow)
     log.info('patrol: %d ready, agents avail=%s', len(ready), avail_summary)
     fired = 0
@@ -625,19 +583,12 @@ def patrol_loop():
             log.debug('Skipping %s — %s already running a task', node['id'], agent)
             continue
 
-        # ── BUG 1: Ghost node guard — scan ALL running nodes for this agent ─────
-        for other in workflow.get('nodes', []):
-            if other['id'] != node['id'] and other.get('assigned_to', '').lower() == agent and other['status'] == 'running':
-                log.warning('Ghost node %s for %s detected — resetting', other['id'], agent)
-                other['status'] = 'pending'
-                other['assigned_to'] = None
-                other.pop('fired_at', None)
-                update_agent_task(agent, '', 'pending')
-        # ─────────────────────────────────────────────────────────────────────────
-
+        node['status'] = 'running'
+        node['fired_at'] = datetime.now(timezone.utc).isoformat()
+        write_workflow(workflow)
         update_agent_task(agent, node['id'], 'running')
 
-        ok = fire_task(node, workflow)
+        ok = fire_task(node)
         if not ok:
             node['status'] = 'pending'
             update_agent_task(agent, '', 'pending')

@@ -176,8 +176,7 @@ def enforce_https():
     """Redirect HTTP to HTTPS in production."""
     if os.environ.get('NEXUSOS_ENV') == 'production':
         if request.headers.get('X-Forwarded-Proto', 'http') != 'https':
-            from flask import redirect
-            return redirect(request.url.replace('http://', 'https://'), code=302)
+            return jsonify({'error': 'HTTPS required'}), 301
 
 @app.after_request
 def add_security_headers(response):
@@ -441,8 +440,7 @@ JSON:"""
         cur = conn.cursor()
         # Collect node IDs for embedding generation
         stored_nodes = []
-        stored = 0
-
+        
         for mem in memories:
             if not isinstance(mem, dict):
                 continue
@@ -985,6 +983,8 @@ def require_auth(f):
             conn = get_db_connection()
             cursor = conn.cursor()
             
+            # Support both hashed and unhashed keys for backward compatibility
+            # Try both: hash of full key, hash of key without prefix, and raw key
             key_hash = hashlib.sha256(api_key.encode()).hexdigest()
             key_part = api_key.replace('sk-nexus-', '').replace('lp-', '')
             key_hash_part = hashlib.sha256(key_part.encode()).hexdigest()
@@ -993,8 +993,8 @@ def require_auth(f):
                 SELECT ak.user_id, u.email, u.credits, u.subscription_tier, u.role
                 FROM api_keys ak
                 JOIN users u ON u.id = ak.user_id
-                WHERE (ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
-            """, (key_hash, key_hash_part))
+                WHERE (ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
+            """, (key_hash, key_hash_part, api_key, key_part))
             
             row = cursor.fetchone()
             
@@ -1002,10 +1002,10 @@ def require_auth(f):
                 conn.close()
                 return jsonify({'error': 'Invalid API key'}), 401
             
-            # Update last used timestamp
+            # Update last used - match any of the possible key formats
             cursor.execute(
-                "UPDATE api_keys SET last_used = %s WHERE (key_hash = %s OR key_hash = %s)",
-                (datetime.now().isoformat(), key_hash, key_hash_part)
+                "UPDATE api_keys SET last_used = %s WHERE (key_hash = %s OR key_hash = %s OR key_hash = %s OR key_hash = %s)",
+                (datetime.now().isoformat(), key_hash, key_hash_part, api_key, key_part)
             )
             conn.commit()
             conn.close()
@@ -1595,9 +1595,9 @@ def logout():
         cursor.execute("""
             UPDATE api_keys 
             SET is_active = false, last_used = %s
-            WHERE key_hash IN (%s, %s) AND is_active = true
+            WHERE key_hash IN (%s, %s, %s, %s) AND is_active = true
             RETURNING id, user_id
-        """, (datetime.now().isoformat(), key_hash, key_hash_part))
+        """, (datetime.now().isoformat(), key_hash, key_hash_part, api_key, key_part))
         
         revoked_row = cursor.fetchone()
         
