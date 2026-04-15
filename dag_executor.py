@@ -356,6 +356,14 @@ def fire_task(node, thread_id=CREW_THREAD):
 
 # ── QA Node Auto-creation ──────────────────────────────────────────────────────
 def create_qa_node(commit_node, workflow):
+    # Deduplication: skip if a QA variant for this commit already exists
+    src_id = commit_node['id']
+    for n in workflow.get('nodes', []):
+        deps = n.get('depends_on', [])
+        if src_id in deps and ('_qa_' in n['id'] or '_alt' in n['id']):
+            log.debug('QA node for %s already exists (%s) — skipping', src_id, n['id'])
+            return None
+
     node_id_base = commit_node['id'].replace('_c_', '_qa_')
 
     existing_ids = {n['id'] for n in workflow['nodes']}
@@ -417,8 +425,9 @@ def apply_result_event(workflow, agent_name, status, output, node_id=None):
         # Auto-create QA node for backend commit-type nodes
         if agent_node.get('agent_category') == 'backend':
             qa_node = create_qa_node(agent_node, workflow)
-            workflow['nodes'].append(qa_node)
-            log.info('Auto-created QA node: %s depending on %s', qa_node['id'], resolved_node_id)
+            if qa_node is not None:
+                workflow['nodes'].append(qa_node)
+                log.info('Auto-created QA node: %s depending on %s', qa_node['id'], resolved_node_id)
 
         log.info('RESULT [%s] %s: %s', resolved_node_id, agent_name, status)
 
@@ -538,6 +547,26 @@ def patrol_loop():
     snapshot = memory_snapshot()
     available = who_is_available(snapshot, workflow)
     avail_summary = {k: v[1] for k, v in available.items()}
+
+    # ── BUG 1: Timeout safety net — reset stale running nodes ─────────────────
+    NODE_TIMEOUT = 600  # seconds
+    now = datetime.now(timezone.utc)
+    for n in workflow.get('nodes', []):
+        if n['status'] == 'running' and 'fired_at' in n:
+            try:
+                fired_time = datetime.fromisoformat(n['fired_at'].replace('Z', '+00:00'))
+                age = (now - fired_time).total_seconds()
+                if age > NODE_TIMEOUT:
+                    log.warning('Running node %s timed out after %ds — reset to pending', n['id'], int(age))
+                    n['status'] = 'pending'
+                    n['assigned_to'] = None
+                    n.pop('fired_at', None)
+                    update_agent_task(n.get('assigned_to', ''), '', 'pending')
+            except Exception as e:
+                log.debug('Could not parse fired_at for %s: %s', n['id'], e)
+    write_workflow(workflow)
+    # ─────────────────────────────────────────────────────────────────────────
+
     ready = find_ready_nodes(workflow)
     log.info('patrol: %d ready, agents avail=%s', len(ready), avail_summary)
     fired = 0
@@ -560,6 +589,17 @@ def patrol_loop():
             log.debug('Skipping %s — %s already running a task', node['id'], agent)
             continue
 
+        # Belt-and-suspenders: confirm no other running node for this agent (ghost guard)
+        for other in workflow.get('nodes', []):
+            if other['id'] != node['id'] and other.get('assigned_to', '').lower() == agent and other['status'] == 'running':
+                log.warning('Ghost node %s for %s detected — resetting', other['id'], agent)
+                other['status'] = 'pending'
+                other['assigned_to'] = None
+                other.pop('fired_at', None)
+                update_agent_task(agent, '', 'pending')
+
+        # Stamp fired_at BEFORE writing workflow
+        node['fired_at'] = datetime.now(timezone.utc).isoformat()
         node['status'] = 'running'
         write_workflow(workflow)
         update_agent_task(agent, node['id'], 'running')
