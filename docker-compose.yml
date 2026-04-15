@@ -11,8 +11,8 @@
 #   docker build -t lipaira-web:latest ./lipaira-web
 #   docker stop lipaira-api lipaira-web
 #   docker rm lipaira-api lipaira-web
-#   docker run -d [env vars from .env] --network lipaira-net --name lipaira-api lipaira-api:latest
-#   docker run -d --network lipaira-net --name lipaira-web lipaira-web:latest
+#   docker run -d [env vars from .env] --network nexusos_lipaira-net --name lipaira-api lipaira-api:latest
+#   docker run -d --network nexusos_lipaira-net --name lipaira-web lipaira-web:latest
 
 services:
 
@@ -28,14 +28,14 @@ services:
    - ./traefik.yml:/etc/traefik/traefik.yml:ro
    - ./lipaira-traefik-dynamic.yml:/etc/traefik/lipaira-traefik-dynamic.yml:ro
   networks:
-   - lipaira-net
+   - nexusos_lipaira-net
   restart: unless-stopped
 
  lipaira-web:
   image: lipaira-web:latest
   container_name: lipaira-web
   networks:
-   - lipaira-net
+   - nexusos_lipaira-net
   restart: unless-stopped
   labels:
    - "traefik.enable=true"
@@ -63,7 +63,7 @@ services:
    - INTERNAL_KEY=${INTERNAL_KEY}
    - NEXUSOS_ENV=${NEXUSOS_ENV:-staging}
   networks:
-   - lipaira-net
+   - nexusos_lipaira-net
   restart: unless-stopped
   labels:
    - "traefik.enable=true"
@@ -81,6 +81,6 @@ services:
    - "traefik.http.services.api.loadbalancer.server.port=8080"
 
 networks:
- lipaira-net:
+ nexusos_lipaira-net:
   external: true
-  name: lipaira-net
+  name: nexusos_lipaira-net

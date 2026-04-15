@@ -7,7 +7,7 @@ entryPoints:
 providers:
   docker:
     exposedByDefault: false
-    network: lipaira-net
+    network: nexusos_lipaira-net
   file:
     filename: /etc/traefik/lipaira-traefik-dynamic.yml
 

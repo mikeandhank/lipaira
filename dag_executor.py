@@ -29,7 +29,7 @@ WORKFLOW_PATH = '/opt/data/workflow.json'
 MEMORY_URL    = 'http://172.20.0.1:9001'
 MEMORY_SECRET = '38467057af586e03135a309f27c62f1737b0f1f595e91713cc32f45aa310f78c'
 
-TELEGRAM_TOKEN = os.environ.get('DAG_EXECUTOR_TELEGRAM_TOKEN', '')
+TELEGRAM_TOKEN=os.environ.get('DAG_EXECUTOR_TELEGRAM_TOKEN') or os.environ.get('TELEGRAM_BOT_TOKEN', '')
 GROUP_CHAT_ID  = -1003995894784
 CREW_THREAD    = 3
 QA_THREAD      = 5
@@ -84,7 +84,7 @@ def http_result():
         resolved_node_id = node_id
         if not resolved_node_id:
             for n in workflow.get('nodes', []):
-                if n.get('assigned_to', '').lower() == agent_name.lower():
+                if (n.get('assigned_to') or '').lower() == agent_name.lower():
                     if n['status'] in ('done', 'failed'):
                         resolved_node_id = n['id']
                         break
@@ -189,14 +189,39 @@ def memory_write(key, value):
 
 
 # ── Agent Availability ─────────────────────────────────────────────────────────
-def is_agent_available(agent_name, snapshot):
+def is_agent_available(agent_name, snapshot, workflow=None):
+    """
+    Returns (True, 'available') if agent can accept new work.
+    
+    An agent with a stale current_task in memory (from an old/abandoned DAG run)
+    is treated as available if that task is not a running node in the workflow.
+    
+    The 5-minute heartbeat check only applies when the agent actually has a running
+    node — a stale heartbeat on an idle agent is irrelevant.
+    """
     mem = snapshot.get('memory', {})
-    current_task = mem.get(f'agent:{agent_name}:current_task', {}).get('value', '')
-    last_seen_str = mem.get(f'agent:{agent_name}:last_seen', {}).get('value', '')
+    current_task_raw = (mem.get(f'agent:{agent_name}:current_task', {}) or {}).get('value')
+    current_task = current_task_raw if current_task_raw else ''
+    last_seen_raw = (mem.get(f'agent:{agent_name}:last_seen', {}) or {}).get('value')
+    last_seen_str = last_seen_raw if last_seen_raw else ''
 
+    # Check if agent has a live running node in the workflow
+    has_running_node = False
+    if workflow is not None and node_agent_busy(workflow, agent_name, snapshot):
+        has_running_node = True
+
+    # If agent has a current_task in memory, verify it's actually running
     if current_task and current_task.lower() not in ('null', 'none', ''):
-        return False, f'busy: {current_task}'
+        if has_running_node:
+            return False, f'busy: {current_task}'
+        # current_task exists in memory but not in workflow as running → stale
+        log.debug('Agent %s has stale current_task=%s — treating as available', agent_name, current_task)
 
+    # If agent has no running node in workflow, they're eligible — heartbeat age doesn't matter
+    if not has_running_node:
+        return True, 'available'
+
+    # Agent has a running node — check heartbeat to confirm they're alive
     if not last_seen_str:
         return False, 'no heartbeat'
 
@@ -211,10 +236,10 @@ def is_agent_available(agent_name, snapshot):
     return True, 'available'
 
 
-def who_is_available(snapshot):
+def who_is_available(snapshot, workflow=None):
     available = {}
     for name in AGENT_WEBHOOKS:
-        avail, reason = is_agent_available(name, snapshot)
+        avail, reason = is_agent_available(name, snapshot, workflow)
         available[name] = (avail, reason)
     return available
 
@@ -265,6 +290,7 @@ def find_ready_nodes(workflow):
             continue
         if all_dependencies_done(workflow, n):
             ready.append(n)
+    log.info('find_ready: %d nodes ready — %s', len(ready), [n['id'] for n in ready])
     return ready
 
 
@@ -272,9 +298,25 @@ def find_running_nodes(workflow):
     return [n for n in workflow.get('nodes', []) if n['status'] == 'running']
 
 
-def node_agent_busy(workflow, agent_name):
+def node_agent_busy(workflow, agent_name, snapshot=None):
+    """Returns True if agent has a running node in workflow AND is still alive (fresh heartbeat).
+    If the running node exists but the agent's last_seen is stale, the node is stuck — return False
+    so the patrol loop can fire new tasks to this agent."""
+    from datetime import datetime, timezone
     for n in workflow.get('nodes', []):
-        if n.get('assigned_to', '').lower() == agent_name.lower() and n['status'] == 'running':
+        if (n.get('assigned_to') or '').lower() == agent_name.lower() and n['status'] == 'running':
+            # Agent has a running node — check if they're actually alive
+            if snapshot:
+                last_seen_str = snapshot.get('memory', {}).get(f'agent:{agent_name}:last_seen', {}).get('value', '')
+                if last_seen_str:
+                    try:
+                        ts = datetime.fromisoformat(last_seen_str.replace('Z', '+00:00'))
+                        age = (datetime.now(timezone.utc) - ts).total_seconds()
+                        if age > 300:  # stale — node is stuck, allow new tasks
+                            log.debug('Agent %s has stale running node, treating as available', agent_name)
+                            return False
+                    except Exception:
+                        pass
             return True
     return False
 
@@ -300,7 +342,7 @@ def format_task_message(node):
 def fire_task(node, thread_id=CREW_THREAD):
     """Fire a task by posting the formatted TASK message to the crew group via Telegram bot."""
     # Route Patrick's QA tasks to the QA thread
-    if node.get('assigned_to', '').lower() == 'patrick':
+    if (node.get('assigned_to') or '').lower() == 'patrick':
         thread_id = QA_THREAD
     try:
         message = format_task_message(node)
@@ -343,92 +385,6 @@ def create_qa_node(commit_node, workflow):
     return qa_node
 
 
-# ── Fix Queue (Phase 3) ──────────────────────────────────────────────────────
-
-FIX_ASSIGNMENT = {
-    'client':    'BigBadinky',
-    'frontend':  'BigBadinky',
-    'ui':        'BigBadinky',
-}
-
-
-def _assignee_for_file(filename):
-    lower = filename.lower()
-    for prefix, agent in FIX_ASSIGNMENT.items():
-        if prefix in lower:
-            return agent
-    return 'JimboJames'
-
-
-def parse_qa_findings(text):
-    findings = []
-    for line in text.split('\n'):
-        line = line.strip()
-        if not line or line.startswith('#') or line.startswith('RESULT'):
-            continue
-        m = re.match(r'^([a-zA-Z_][a-zA-Z0-9_/]*\.py):([0-9]+)\s+(critical|high|medium|low)\s+(.+)$', line, re.I)
-        if m:
-            findings.append({'file': m.group(1), 'line': int(m.group(2)), 'priority': m.group(3).lower(), 'description': m.group(4)})
-            continue
-        m = re.match(r'^(critical|high|medium|low)\s+(.+)$', line, re.I)
-        if m:
-            findings.append({'file': '', 'line': 0, 'priority': m.group(1).lower(), 'description': m.group(2)})
-    return findings
-
-
-def create_fix_node(finding, qa_node, workflow):
-    existing_ids = {n['id'] for n in workflow['nodes']}
-    base = 'fix_' + qa_node['id'].replace('_qa_', '_fix_')
-    fix_id = base
-    counter = 1
-    while fix_id in existing_ids:
-        fix_id = base + '_alt' + str(counter)
-        counter += 1
-
-    priority = finding.get('priority', 'medium').lower()
-    file_ref = finding.get('file', '')
-    line_ref = finding.get('line', 0)
-    desc = finding.get('description', 'fix QA finding')
-
-    assignee = _assignee_for_file(file_ref) if file_ref else 'JimboJames'
-
-    notes = 'QA finding: ' + desc
-    if file_ref:
-        notes += ' — ' + file_ref + (':' + str(line_ref) if line_ref else '')
-    notes += ' [priority: ' + priority + ']'
-
-    fix_node = {
-        'id': fix_id,
-        'description': 'Fix: ' + desc[:120],
-        'agent_category': 'backend',
-        'assigned_to': assignee,
-        'depends_on': [qa_node['id']],
-        'status': 'pending',
-        'context': {
-            'spec_ref': qa_node.get('context', {}).get('spec_ref', ''),
-            'files': [file_ref] if file_ref else [],
-            'patterns': [],
-            'notes': notes,
-            'qa_finding': finding
-        },
-        'result': None,
-        'error': None,
-        'priority': priority
-    }
-    return fix_node
-
-
-def process_qa_findings(qa_node, findings, workflow):
-    created = []
-    for f in findings:
-        node = create_fix_node(f, qa_node, workflow)
-        workflow['nodes'].append(node)
-        created.append(node)
-        log.info('Fix queued [%s]: %s -> %s (%s)',
-                 f.get('priority', '?'), node['id'], node['assigned_to'], f.get('file', ''))
-    return created
-
-
 # ── Result Event Processor ─────────────────────────────────────────────────────
 def apply_result_event(workflow, agent_name, status, output, node_id=None):
     """
@@ -443,7 +399,7 @@ def apply_result_event(workflow, agent_name, status, output, node_id=None):
         agent_node = get_node(workflow, node_id)
     else:
         for n in workflow.get('nodes', []):
-            if n.get('assigned_to', '').lower() == agent_name.lower() and n['status'] == 'running':
+            if (n.get('assigned_to') or '').lower() == agent_name.lower() and n['status'] == 'running':
                 agent_node = n
                 break
 
@@ -463,13 +419,6 @@ def apply_result_event(workflow, agent_name, status, output, node_id=None):
             qa_node = create_qa_node(agent_node, workflow)
             workflow['nodes'].append(qa_node)
             log.info('Auto-created QA node: %s depending on %s', qa_node['id'], resolved_node_id)
-
-        # QA result → parse findings and queue fix nodes (Phase 3 fix queue)
-        if agent_node.get('agent_category') == 'qa' and output:
-            findings = parse_qa_findings(output)
-            if findings:
-                created = process_qa_findings(agent_node, findings, workflow)
-                log.info('Fix queue: added %d fix nodes from QA result', len(created))
 
         log.info('RESULT [%s] %s: %s', resolved_node_id, agent_name, status)
 
@@ -516,7 +465,7 @@ def poll_telegram_results():
             continue
 
         thread_id = msg.get('message_thread_id')
-        if thread_id not in (CREW_THREAD, QA_THREAD):
+        if thread_id != CREW_THREAD:
             continue
 
         sender = msg.get('from', {})
@@ -587,8 +536,10 @@ def patrol_loop():
         return
 
     snapshot = memory_snapshot()
-    available = who_is_available(snapshot)
+    available = who_is_available(snapshot, workflow)
+    avail_summary = {k: v[1] for k, v in available.items()}
     ready = find_ready_nodes(workflow)
+    log.info('patrol: %d ready, agents avail=%s', len(ready), avail_summary)
     fired = 0
 
     for node in ready:
@@ -605,7 +556,7 @@ def patrol_loop():
             log.debug('Skipping %s — %s: %s', node['id'], agent, reason)
             continue
 
-        if node_agent_busy(workflow, agent):
+        if node_agent_busy(workflow, agent, snapshot):
             log.debug('Skipping %s — %s already running a task', node['id'], agent)
             continue
 
@@ -678,7 +629,9 @@ def run():
             patrol_loop()
             result_loop()
         except Exception as e:
+            import traceback
             log.error('Main loop error: %s', e)
+            log.error('Trace: %s', traceback.format_exc())
 
         time.sleep(PATROL_INTERVAL)
 

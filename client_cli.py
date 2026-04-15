@@ -88,7 +88,7 @@ class LipairaClient:
 
 def main():
     parser = argparse.ArgumentParser(description='Lipaira Client')
-    parser.add_argument('--key', '-k', help='Lipaira API Key (or set LIPAIRA_API_KEY)')
+    parser.add_argument('--key', '-k', help='Nexus API Key (or set NEXUS_API_KEY)')
     parser.add_argument('--server', '-s', default=DEFAULT_SERVER, help='Server URL')
     parser.add_argument('--message', '-m', help='Message to send')
     parser.add_argument('--model', help='Model to use')
@@ -100,10 +100,10 @@ def main():
     
     args = parser.parse_args()
     
-    api_key = args.key or os.environ.get('LIPAIRA_API_KEY')
+    api_key = args.key or os.environ.get('NEXUS_API_KEY')
     
     if args.register:
-        client = LipairaClient('dummy', args.server)
+        client = NexusClient('dummy', args.server)
         result = client.register(args.register[0], args.register[1])
         if 'error' in result:
             print(f"Error: {result['error']}")
@@ -112,7 +112,7 @@ def main():
         sys.exit(0)
     
     if args.login:
-        client = LipairaClient('dummy', args.server)
+        client = NexusClient('dummy', args.server)
         result = client.login(args.login[0], args.login[1])
         if 'error' in result:
             print(f"Error: {result['error']}")
@@ -121,10 +121,10 @@ def main():
         sys.exit(0)
     
     if not api_key:
-        print("Error: API key required (--key or LIPAIRA_API_KEY)")
+        print("Error: API key required (--key or NEXUS_API_KEY)")
         sys.exit(1)
     
-    client = LipairaClient(api_key, args.server)
+    client = NexusClient(api_key, args.server)
     
     if args.config:
         print(json.dumps(client.get_config(), indent=2))
