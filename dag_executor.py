@@ -365,19 +365,26 @@ def fire_task(node, workflow, thread_id=CREW_THREAD):
 
 # ── QA Node Auto-creation ──────────────────────────────────────────────────────
 def create_qa_node(commit_node, workflow):
-    """
-    Create a QA review node for a backend commit-type node.
+    """Create a QA node for a completed commit node.
 
-    Deduplication: before creating, scans existing nodes for any node where
-    (a) depends_on contains the same source_id, AND
-    (b) node id contains '_qa' or '_alt'
-    If found, returns None to skip creating a duplicate QA node.
+    Args:
+        commit_node: The backend commit node that just completed.
+                     Its 'id' is used as the depends_on target.
+        workflow: The current workflow dict containing all nodes.
+
+    Returns:
+        A new QA node dict assigned to Patrick, depending on the commit node.
+        Returns None if a QA variant for this commit already exists in the
+        workflow (deduplication: any existing node whose id contains '_qa_'
+        or '_alt' AND whose depends_on includes the commit node's id is
+        taken as a duplicate and skipped).
     """
     src_id = commit_node['id']
+
     # Deduplication: skip if a QA variant for this commit already exists
     for n in workflow.get('nodes', []):
         deps = n.get('depends_on', [])
-        if src_id in deps and ('_qa' in n['id'] or '_alt' in n['id']):
+        if src_id in deps and ('_qa_' in n['id'] or '_alt' in n['id']):
             log.debug('QA node for %s already exists (%s) — skipping', src_id, n['id'])
             return None
 
