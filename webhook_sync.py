@@ -25,27 +25,6 @@ event_queue = []
 event_lock = threading.Lock()
 
 
-def process_event_async(event_type: str, data: dict, user_id: str = None):
-    """Process webhook event asynchronously."""
-    def _process():
-        try:
-            if event_type == 'invoice_paid':
-                # Update memory with payment info
-                _update_memory_invoice_paid(data, user_id)
-            elif event_type == 'email_received':
-                # Classify email and update memory
-                _classify_email(data, user_id)
-            elif event_type == 'calendar_invite':
-                # Check for conflicts
-                _check_calendar_conflicts(data, user_id)
-            logger.info(f"Webhook event processed: {event_type}")
-        except Exception as e:
-            logger.error(f"Event processing failed: {e}")
-    
-    thread = threading.Thread(target=_process)
-    thread.start()
-
-
 def _update_memory_invoice_paid(data: dict, user_id: str):
     """Handle invoice paid event - update memory within 5 seconds."""
     invoice_id = data.get('invoice_id')
@@ -116,8 +95,9 @@ def quickbooks_webhook():
     data = payload.get('payload', {})
     
     if event_type == 'Invoice.paymentmade':
-        # Invoice paid
-        process_event_async('invoice_paid', {
+        # Invoice paid - emit via event bus
+        from event_bus import emit_event
+        emit_event('invoice_paid', 'qb_user', {
             'invoice_id': data.get('Id'),
             'amount': data.get('TotalAmt'),
             'client_name': data.get('CustomerRef', {}).get('name')
@@ -153,8 +133,9 @@ def calendar_webhook():
     
     logger.info(f"Calendar webhook: {channel_id}")
     
-    # Process as calendar invite
-    process_event_async('calendar_invite', {
+    # Process as calendar invite - emit via event bus
+    from event_bus import emit_event
+    emit_event('calendar_conflict', 'calendar_user', {
         'channel_id': channel_id,
         'resource_id': resource_id
     })
@@ -170,7 +151,8 @@ def shopify_webhook():
     topic = request.headers.get('X-Shopify-Topic', '')
     
     if topic == 'orders/paid':
-        process_event_async('order_paid', payload)
+        from event_bus import emit_event
+        emit_event('payment_received', 'shopify_user', payload)
     
     return jsonify({'success': True})
 
@@ -183,7 +165,8 @@ def stripe_webhook():
     event_type = payload.get('type')
     
     if event_type == 'invoice.payment_succeeded':
-        process_event_async('invoice_paid', {
+        from event_bus import emit_event
+        emit_event('invoice_paid', 'stripe_user', {
             'invoice_id': payload.get('data', {}).get('object', {}).get('id'),
             'amount': payload.get('data', {}).get('object', {}).get('amount_paid')
         })

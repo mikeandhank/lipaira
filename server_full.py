@@ -116,6 +116,7 @@ from lipaira_client.microsoft_oauth import microsoft_bp
 from square_oauth import square_bp
 from webhook_sync import webhook_bp
 from push_notifications import create_push_routes
+from event_bus import get_event_bus
 
 # Start background tasks (billing sweep, memory sweep)
 try:
@@ -124,6 +125,12 @@ try:
 except Exception as e:
     logging.warning(f"Failed to start background tasks: {e}")
 
+# Initialize event bus (Block 4 Item 16)
+try:
+    event_bus = get_event_bus()
+    logger.info("EventBus initialized")
+except Exception as e:
+    logger.warning(f"EventBus initialization failed: {e}")
 # Register integration routes
 # Commented out - using server_full.py endpoint instead
 app.register_blueprint(integrations_bp)
