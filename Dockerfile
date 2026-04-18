@@ -58,7 +58,8 @@ RUN pip install --no-cache-dir --break-system-packages \
     google-auth-oauthlib==1.2.0 \
     google-auth-httplib2==0.2.0 \
     msal==1.28.0 \
-    pywebpush==1.14.0
+    pywebpush==1.14.0 \
+    numpy==1.26.4
 
 # Set ownership
 RUN chown -R lipaira:lipaira /opt/lipaira

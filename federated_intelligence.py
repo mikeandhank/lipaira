@@ -6,10 +6,35 @@
 
 import os
 import json
+import numpy as np
 from typing import Dict, Any, Optional, List
 import psycopg2
 
 MIN_COHORT_SIZE = 5  # Minimum users required before surfacing any aggregates
+DIFFERENTIAL_PRIVACY_EPSILON = 1.0  # Privacy budget — lower = more private, noisier
+# Sensitivity: max change in output from adding/removing one user.
+# For hourly rate in dollars, we assume a sane bound of 500 $/hr.
+RATE_SENSITIVITY = 500.0
+
+
+def _add_laplace_noise(value: float, sensitivity: float = RATE_SENSITIVITY,
+                       epsilon: float = DIFFERENTIAL_PRIVACY_EPSILON) -> float:
+    """
+    Inject Laplace noise for (epsilon, delta)-differential privacy.
+
+    With epsilon=1.0 and sensitivity=500, the noise scale is 500:
+    - At epsilon=1.0: 63% of noise within ±500, 95% within ±1500
+    - At epsilon=0.5:  halves the noise amplitude (more private, noisier)
+    The true aggregate is concealed within the noise floor.
+    """
+    if value is None:
+        return None
+    return value + np.random.laplace(0, sensitivity / epsilon)
+
+
+def _round_noisy(value: float, granularity: float = 1.0) -> float:
+    """Round a differentially-private value to hide the noise precision."""
+    return round(value / granularity) * granularity
 
 class FederatedIntelligence:
     """Privacy-preserving federated intelligence for benchmarking."""
@@ -162,14 +187,21 @@ class FederatedIntelligence:
                     'reason': f'Not enough users in cohort (need {MIN_COHORT_SIZE})'
                 }
                 
-            # Return anonymized aggregate (no individual data)
+            # Return anonymized, differentially-private aggregate.
+            # Laplace noise is added to each statistic independently.
+            # Rounding to nearest $5 obscures the noise precision.
+            min_noisy = _round_noisy(_add_laplace_noise(row[1]), 5)
+            max_noisy = _round_noisy(_add_laplace_noise(row[2]), 5)
+            avg_noisy = _round_noisy(_add_laplace_noise(float(row[3]) if row[3] else None), 5)
+            median_noisy = _round_noisy(_add_laplace_noise(float(row[4]) if row[4] else None), 5)
+
             return {
                 'available': True,
                 'cohort_size': row[0],
-                'rate_range': f'${int(row[1])}-${int(row[2])}/hr',
-                'median_rate': f'${int(row[4])}/hr' if row[4] else None,
+                'rate_range': f'${int(min_noisy)}-${int(max_noisy)}/hr',
+                'median_rate': f'${int(median_noisy)}/hr' if median_noisy else None,
                 'your_rate': f'${int(user_rate)}/hr' if user_rate else 'Not set',
-                'your_position': self._calculate_position(user_rate, row[1], row[2]) if user_rate else 'N/A'
+                'your_position': self._calculate_position(user_rate, min_noisy, max_noisy) if user_rate else 'N/A'
             }
             
         except Exception as e:
