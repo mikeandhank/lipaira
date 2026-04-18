@@ -125,12 +125,24 @@ try:
 except Exception as e:
     logging.warning(f"Failed to start background tasks: {e}")
 
+# Start anticipatory scheduler (Block 4 Item 17)
+try:
+    from anticipatory_scheduler import AnticipatoryScheduler
+    _anticipatory_scheduler = AnticipatoryScheduler()
+    _anticipatory_scheduler.start()
+    import atexit
+    atexit.register(lambda: _anticipatory_scheduler.stop())
+    logger.info("Anticipatory scheduler started")
+except Exception as e:
+    logging.warning(f"Failed to start anticipatory scheduler: {e}")
+
 # Initialize event bus (Block 4 Item 16)
 try:
     event_bus = get_event_bus()
     logger.info("EventBus initialized")
 except Exception as e:
     logger.warning(f"EventBus initialization failed: {e}")
+
 # Register integration routes
 # Commented out - using server_full.py endpoint instead
 app.register_blueprint(integrations_bp)
