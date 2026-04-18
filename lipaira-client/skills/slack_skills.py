@@ -11,7 +11,22 @@ SLACK_BASE = "https://slack.com/api"
 
 
 def get_slack_token():
+    """Get Slack token from internal API for the current user."""
     import os
+    import requests
+    user_id = os.environ.get('USER_ID', 'default')
+    gateway_url = os.environ.get('GATEWAY_URL', 'http://lipaira-api:80')
+    try:
+        resp = requests.get(
+            f'{gateway_url}/api/internal/slack-token',
+            headers={'X-User-ID': user_id},
+            timeout=10
+        )
+        if resp.status_code == 200:
+            return resp.json().get('token')
+    except:
+        pass
+    # Fallback to env var (legacy support)
     return os.environ.get('SLACK_BOT_TOKEN')
 
 

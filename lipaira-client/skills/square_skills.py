@@ -12,7 +12,24 @@ SQUARE_BASE = "https://connect.squareup.com/v2"
 
 
 def get_square_token():
+    """Fetch Square token from internal endpoint."""
     import os
+    user_id = os.environ.get('USER_ID', 'default')
+    gateway_url = os.environ.get('GATEWAY_URL', 'http://lipaira-api:80')
+    
+    try:
+        resp = requests.get(
+            f"{gateway_url}/api/internal/square-token",
+            headers={'X-User-ID': user_id},
+            timeout=10
+        )
+        if resp.ok:
+            data = resp.json()
+            return data.get('token')
+    except Exception:
+        pass
+    
+    # Fallback to env var for backward compatibility
     return os.environ.get('SQUARE_ACCESS_TOKEN')
 
 
