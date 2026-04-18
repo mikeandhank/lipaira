@@ -143,6 +143,16 @@ try:
 except Exception as e:
     logger.warning(f"EventBus initialization failed: {e}")
 
+# Initialize skill hot loader (Block 5 Item 16)
+try:
+    import atexit
+    from skill_registry import skill_registry
+    from skill_hot_loader import start_hot_loader, stop_hot_loader
+    _hot_loader = start_hot_loader(registry=skill_registry)
+    atexit.register(stop_hot_loader)
+    logging.info("SkillHotLoader initialized")
+except Exception as e:
+    logging.warning(f"Failed to start SkillHotLoader: {e}")
 # Register integration routes
 # Commented out - using server_full.py endpoint instead
 app.register_blueprint(integrations_bp)
