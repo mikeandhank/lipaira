@@ -113,6 +113,7 @@ except Exception as e:
 from lipaira_client.quickbooks_oauth import quickbooks_bp
 from google_oauth import google_bp
 from lipaira_client.microsoft_oauth import microsoft_bp
+from square_oauth import square_bp
 from webhook_sync import webhook_bp
 from push_notifications import create_push_routes
 
@@ -137,6 +138,7 @@ app.register_blueprint(webhooks_bp)
 app.register_blueprint(quickbooks_bp)
 app.register_blueprint(google_bp)
 app.register_blueprint(microsoft_bp)
+app.register_blueprint(square_bp)
 # webhook_bp already registered above (Item 15)
 
 # lipaira-providers — only register if imports succeed
@@ -1697,6 +1699,69 @@ def delete_user(user_id):
         conn.commit()
         conn.close()
         
+        # ── Delete Redis user data ──────────────────────────────────────────────
+        try:
+            import redis as redis_lib
+            redis_url = os.environ.get('REDIS_URL', 'redis://lipaira-redis:6379')
+            r = redis_lib.from_url(redis_url)
+            # Delete all user-specific Redis keys (sessions, OAuth state, rate limits)
+            user_patterns = [
+                f"session:{user_id}:*",
+                f"oauth_state:{user_id}:*",
+                f"login_attempts:*",
+                f"user:{user_id}:*",
+            ]
+            redis_deleted = 0
+            for pattern in user_patterns:
+                keys = r.keys(pattern)
+                if keys:
+                    r.delete(*keys)
+                    redis_deleted += len(keys)
+            # Also delete by user_id prefix patterns
+            for prefix in ['session:', 'oauth_state:']:
+                keys = r.keys(f"{prefix}*")
+                for key in keys:
+                    val = r.get(key)
+                    if val and user_id in str(val):
+                        r.delete(key)
+                        redis_deleted += 1
+            deleted_counts['redis_keys'] = redis_deleted
+        except Exception as redis_err:
+            logger.warning(f"Redis cleanup failed during GDPR deletion: {redis_err}")
+            deleted_counts['redis_keys'] = 0
+        
+        # ── Delete AWS Secrets Manager user secrets ─────────────────────────────
+        try:
+            import boto3
+            import botocore.exceptions
+            asm_client = boto3.client('secretsmanager', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
+            secret_prefix = f"/lipaira/{user_id}/"
+            # List and delete all secrets with this user's prefix
+            list_resp = asm_client.list_secrets(Filters=[{'Key': 'name', 'Values': [secret_prefix]}])
+            asm_deleted = 0
+            for secret in list_resp.get('SecretList', []):
+                try:
+                    asm_client.delete_secret(SecretId=secret['Name'], ForceDeleteWithoutRecovery=True)
+                    asm_deleted += 1
+                except botocore.exceptions.ClientError:
+                    pass  # May already be deleted or inaccessible
+            deleted_counts['asm_secrets'] = asm_deleted
+        except Exception as asm_err:
+            logger.warning(f"AWS Secrets Manager cleanup failed during GDPR deletion: {asm_err}")
+            deleted_counts['asm_secrets'] = 0
+        
+        # ── Delete memory embeddings ───────────────────────────────────────────
+        try:
+            emb_conn = get_db_connection()
+            emb_cur = emb_conn.cursor()
+            emb_cur.execute("DELETE FROM memory_embeddings WHERE user_id = %s", (user_id,))
+            deleted_counts['memory_embeddings'] = emb_cur.rowcount
+            emb_conn.commit()
+            emb_conn.close()
+        except Exception as emb_err:
+            logger.warning(f"Memory embeddings cleanup failed: {emb_err}")
+            deleted_counts['memory_embeddings'] = 0
+        
         # Log the successful deletion
         try:
             log_audit(calling_user_id, "delete_user", 
@@ -1712,6 +1777,9 @@ def delete_user(user_id):
                 'user_integrations': deleted_counts.get('user_integrations', 0),
                 'billing_history': deleted_counts.get('billing_history', 0),
                 'memory_nodes': deleted_counts.get('memory_nodes', 0),
+                'memory_embeddings': deleted_counts.get('memory_embeddings', 0),
+                'redis_keys': deleted_counts.get('redis_keys', 0),
+                'asm_secrets': deleted_counts.get('asm_secrets', 0),
                 'users': deleted_counts.get('users', 0),
             }
         }), 200
@@ -3468,21 +3536,22 @@ def slack_callback():
     
     access_token = tokens.get('access_token')
     team_id = tokens.get('team', {}).get('id')
+    team_name = tokens.get('team', {}).get('name', '')
     
     conn = get_db_connection()
     cursor = conn.cursor()
-    try:
-        cursor.execute("""
-            ALTER TABLE users 
-            ADD COLUMN IF NOT EXISTS slack_access_token TEXT,
-            ADD COLUMN IF NOT EXISTS slack_team_id TEXT
-        """)
-    except:
-        pass
     
+    import json
+    extra_data = json.dumps({"team_id": team_id, "team_name": team_name})
     cursor.execute("""
-        UPDATE users SET slack_access_token = %s, slack_team_id = %s WHERE id = %s
-    """, (access_token, team_id, user_id))
+        INSERT INTO user_integrations (user_id, provider, access_token, status, extra, created_at)
+        VALUES (%s, 'slack', %s, 'connected', %s::jsonb, NOW())
+        ON CONFLICT (user_id, provider) DO UPDATE SET
+            access_token = EXCLUDED.access_token,
+            status = 'connected',
+            extra = EXCLUDED.extra,
+            updated_at = NOW()
+    """, (user_id, access_token, extra_data))
     conn.commit()
     conn.close()
     
@@ -3494,8 +3563,9 @@ def slack_callback():
 def slack_status():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT slack_access_token IS NOT NULL FROM users WHERE id = %s", (g.user_id,))
-    connected = cursor.fetchone()[0]
+    cursor.execute("SELECT status = 'connected' FROM user_integrations WHERE user_id = %s AND provider = 'slack'", (g.user_id,))
+    row = cursor.fetchone()
+    connected = row[0] if row else False
     conn.close()
     return jsonify({'connected': connected})
 
@@ -3505,10 +3575,41 @@ def slack_status():
 def slack_disconnect():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE users SET slack_access_token = NULL, slack_team_id = NULL WHERE id = %s", (g.user_id,))
+    cursor.execute("DELETE FROM user_integrations WHERE user_id = %s AND provider = 'slack'", (g.user_id,))
     conn.commit()
     conn.close()
     return jsonify({'success': True})
+
+
+# ── Internal endpoint for agents ───────────────────────────────────────────────
+
+@app.route('/api/internal/slack-token')
+def internal_slack_token():
+    """Return Slack token for agent containers."""
+    user_id = request.headers.get('X-User-ID')
+    if not user_id:
+        return jsonify({'error': 'No user ID'}), 400
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT access_token, extra FROM user_integrations
+        WHERE user_id = %s AND provider = 'slack' AND status = 'connected'
+    """, (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        return jsonify({'error': 'Slack not connected'}), 404
+    
+    access_token = row[0]
+    extra = row[1] or {}
+    
+    return jsonify({
+        'token': access_token,
+        'team_id': extra.get('team_id') if isinstance(extra, dict) else None,
+        'provider': 'slack'
+    })
 
 
 # ============================================================================
