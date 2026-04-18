@@ -113,6 +113,7 @@ except Exception as e:
 from lipaira_client.quickbooks_oauth import quickbooks_bp
 from google_oauth import google_bp
 from lipaira_client.microsoft_oauth import microsoft_bp
+from square_oauth import square_bp
 from webhook_sync import webhook_bp
 from push_notifications import create_push_routes
 
@@ -137,6 +138,7 @@ app.register_blueprint(webhooks_bp)
 app.register_blueprint(quickbooks_bp)
 app.register_blueprint(google_bp)
 app.register_blueprint(microsoft_bp)
+app.register_blueprint(square_bp)
 # webhook_bp already registered above (Item 15)
 
 # lipaira-providers — only register if imports succeed
@@ -1697,6 +1699,69 @@ def delete_user(user_id):
         conn.commit()
         conn.close()
         
+        # ── Delete Redis user data ──────────────────────────────────────────────
+        try:
+            import redis as redis_lib
+            redis_url = os.environ.get('REDIS_URL', 'redis://lipaira-redis:6379')
+            r = redis_lib.from_url(redis_url)
+            # Delete all user-specific Redis keys (sessions, OAuth state, rate limits)
+            user_patterns = [
+                f"session:{user_id}:*",
+                f"oauth_state:{user_id}:*",
+                f"login_attempts:*",
+                f"user:{user_id}:*",
+            ]
+            redis_deleted = 0
+            for pattern in user_patterns:
+                keys = r.keys(pattern)
+                if keys:
+                    r.delete(*keys)
+                    redis_deleted += len(keys)
+            # Also delete by user_id prefix patterns
+            for prefix in ['session:', 'oauth_state:']:
+                keys = r.keys(f"{prefix}*")
+                for key in keys:
+                    val = r.get(key)
+                    if val and user_id in str(val):
+                        r.delete(key)
+                        redis_deleted += 1
+            deleted_counts['redis_keys'] = redis_deleted
+        except Exception as redis_err:
+            logger.warning(f"Redis cleanup failed during GDPR deletion: {redis_err}")
+            deleted_counts['redis_keys'] = 0
+        
+        # ── Delete AWS Secrets Manager user secrets ─────────────────────────────
+        try:
+            import boto3
+            import botocore.exceptions
+            asm_client = boto3.client('secretsmanager', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
+            secret_prefix = f"/lipaira/{user_id}/"
+            # List and delete all secrets with this user's prefix
+            list_resp = asm_client.list_secrets(Filters=[{'Key': 'name', 'Values': [secret_prefix]}])
+            asm_deleted = 0
+            for secret in list_resp.get('SecretList', []):
+                try:
+                    asm_client.delete_secret(SecretId=secret['Name'], ForceDeleteWithoutRecovery=True)
+                    asm_deleted += 1
+                except botocore.exceptions.ClientError:
+                    pass  # May already be deleted or inaccessible
+            deleted_counts['asm_secrets'] = asm_deleted
+        except Exception as asm_err:
+            logger.warning(f"AWS Secrets Manager cleanup failed during GDPR deletion: {asm_err}")
+            deleted_counts['asm_secrets'] = 0
+        
+        # ── Delete memory embeddings ───────────────────────────────────────────
+        try:
+            emb_conn = get_db_connection()
+            emb_cur = emb_conn.cursor()
+            emb_cur.execute("DELETE FROM memory_embeddings WHERE user_id = %s", (user_id,))
+            deleted_counts['memory_embeddings'] = emb_cur.rowcount
+            emb_conn.commit()
+            emb_conn.close()
+        except Exception as emb_err:
+            logger.warning(f"Memory embeddings cleanup failed: {emb_err}")
+            deleted_counts['memory_embeddings'] = 0
+        
         # Log the successful deletion
         try:
             log_audit(calling_user_id, "delete_user", 
@@ -1712,6 +1777,9 @@ def delete_user(user_id):
                 'user_integrations': deleted_counts.get('user_integrations', 0),
                 'billing_history': deleted_counts.get('billing_history', 0),
                 'memory_nodes': deleted_counts.get('memory_nodes', 0),
+                'memory_embeddings': deleted_counts.get('memory_embeddings', 0),
+                'redis_keys': deleted_counts.get('redis_keys', 0),
+                'asm_secrets': deleted_counts.get('asm_secrets', 0),
                 'users': deleted_counts.get('users', 0),
             }
         }), 200
