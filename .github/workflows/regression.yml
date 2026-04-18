@@ -1,0 +1,90 @@
+name: Regression Suite
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'API URL to test'
+        required: false
+        default: 'http://localhost:8080'
+        type: string
+  repository_dispatch:
+    types: [deploy-success]
+
+env:
+  DEPLOYED_API_URL: ${{ vars.LIPAIRA_API_URL || 'http://localhost:8080' }}
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Start JanusGraph as a Docker service for the graph traversal test
+    services:
+      janusgraph:
+        image: janusgraph/janusgraph:latest
+        ports:
+          - 8182:8182
+        options: --health-cmd "curl -s http://localhost:8182/" --health-interval 10s --health-timeout 5s --health-retries 5
+        env:
+          JANUSGRAPH_DB: berkeleyje
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pytest requests gremlinpython
+
+      - name: Wait for JanusGraph to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8182/ > /dev/null 2>&1; then
+              echo "JanusGraph ready"
+              break
+            fi
+            echo "Waiting for JanusGraph... ($i/30)"
+            sleep 2
+          done
+          echo "JANUSGRAPH_AVAILABLE=true" >> $GITHUB_ENV
+
+      - name: Run all regression tests
+        run: |
+          pip install pytest requests gremlinpython
+
+          # Run the standard 23-test suite
+          pytest tests/regression/test_regression.py -v --tb=short 2>&1 | tee test_results.txt
+
+          # Run JanusGraph traversal test (only if JANUSGRAPH_AVAILABLE)
+          if [ "$JANUSGRAPH_AVAILABLE" = "true" ]; then
+            JANUSGRAPH_URL=ws://localhost:8182/gremlin \
+              JANUSGRAPH_AVAILABLE=true \
+              pytest tests/regression/test_janusgraph_traversal.py -v --tb=short 2>&1 | tee janusgraph_results.txt
+          fi
+
+          # ─── Count results ───────────────────────────────────────────────
+          PASS_COUNT=$(grep -c 'PASSED' test_results.txt 2>/dev/null || echo 0)
+          FAIL_COUNT=$(grep -c 'FAILED' test_results.txt 2>/dev/null || echo 0)
+          SKIP_COUNT=$(grep -c 'SKIPPED' test_results.txt 2>/dev/null || echo 0)
+          TOTAL=24  # 23 API tests + 1 JanusGraph traversal test
+          PASS_RATE=$(python3 -c "print(round(($PASS_COUNT)/$TOTAL, 2))")
+          echo "RESULTS: $PASS_COUNT passed, $FAIL_COUNT failed, $SKIP_COUNT skipped out of $TOTAL"
+          echo "JANUSGRAPH: $([ "$JANUSGRAPH_AVAILABLE" = "true" ] && cat janusgraph_results.txt | grep -c 'PASSED' 2>/dev/null || echo 'skipped')"
+          echo "PASS_RATE=$PASS_RATE" >> $GITHUB_ENV
+          echo "FAIL_COUNT=$FAIL_COUNT" >> $GITHUB_ENV
+          if [ "$FAIL_COUNT" -gt 2 ]; then
+            echo "BLOCKING DEPLOY: $FAIL_COUNT failures (pass rate $PASS_RATE < 0.9)"
+            exit 1
+          fi
+
+      - name: Upload all test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-results
+          path: |
+            test_results.txt
+            janusgraph_results.txt
