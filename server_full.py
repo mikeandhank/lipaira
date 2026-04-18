@@ -3536,21 +3536,22 @@ def slack_callback():
     
     access_token = tokens.get('access_token')
     team_id = tokens.get('team', {}).get('id')
+    team_name = tokens.get('team', {}).get('name', '')
     
     conn = get_db_connection()
     cursor = conn.cursor()
-    try:
-        cursor.execute("""
-            ALTER TABLE users 
-            ADD COLUMN IF NOT EXISTS slack_access_token TEXT,
-            ADD COLUMN IF NOT EXISTS slack_team_id TEXT
-        """)
-    except:
-        pass
     
+    import json
+    extra_data = json.dumps({"team_id": team_id, "team_name": team_name})
     cursor.execute("""
-        UPDATE users SET slack_access_token = %s, slack_team_id = %s WHERE id = %s
-    """, (access_token, team_id, user_id))
+        INSERT INTO user_integrations (user_id, provider, access_token, status, extra, created_at)
+        VALUES (%s, 'slack', %s, 'connected', %s::jsonb, NOW())
+        ON CONFLICT (user_id, provider) DO UPDATE SET
+            access_token = EXCLUDED.access_token,
+            status = 'connected',
+            extra = EXCLUDED.extra,
+            updated_at = NOW()
+    """, (user_id, access_token, extra_data))
     conn.commit()
     conn.close()
     
@@ -3562,8 +3563,9 @@ def slack_callback():
 def slack_status():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT slack_access_token IS NOT NULL FROM users WHERE id = %s", (g.user_id,))
-    connected = cursor.fetchone()[0]
+    cursor.execute("SELECT status = 'connected' FROM user_integrations WHERE user_id = %s AND provider = 'slack'", (g.user_id,))
+    row = cursor.fetchone()
+    connected = row[0] if row else False
     conn.close()
     return jsonify({'connected': connected})
 
@@ -3573,10 +3575,41 @@ def slack_status():
 def slack_disconnect():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE users SET slack_access_token = NULL, slack_team_id = NULL WHERE id = %s", (g.user_id,))
+    cursor.execute("DELETE FROM user_integrations WHERE user_id = %s AND provider = 'slack'", (g.user_id,))
     conn.commit()
     conn.close()
     return jsonify({'success': True})
+
+
+# ── Internal endpoint for agents ───────────────────────────────────────────────
+
+@app.route('/api/internal/slack-token')
+def internal_slack_token():
+    """Return Slack token for agent containers."""
+    user_id = request.headers.get('X-User-ID')
+    if not user_id:
+        return jsonify({'error': 'No user ID'}), 400
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT access_token, extra FROM user_integrations
+        WHERE user_id = %s AND provider = 'slack' AND status = 'connected'
+    """, (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        return jsonify({'error': 'Slack not connected'}), 404
+    
+    access_token = row[0]
+    extra = row[1] or {}
+    
+    return jsonify({
+        'token': access_token,
+        'team_id': extra.get('team_id') if isinstance(extra, dict) else None,
+        'provider': 'slack'
+    })
 
 
 # ============================================================================
