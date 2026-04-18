@@ -44,8 +44,18 @@ class FederatedIntelligence:
         self._enabled = False  # Disabled by default until sufficient users
         
     def is_enabled(self) -> bool:
-        """Check if federated intelligence is enabled."""
+        """Check if federated intelligence is enabled.
+        
+        Returns False unless:
+        1. PRIVACY_GUARD_ENABLED is True (privacy review completed)
+        2. Manual _enabled flag is True
+        3. Minimum cohort size (5) is met
+        """
         if not self._enabled:
+            return False
+        
+        # Privacy guard - must be enabled after review
+        if not PRIVACY_GUARD_ENABLED:
             return False
             
         # Check minimum cohort size
@@ -73,7 +83,15 @@ class FederatedIntelligence:
             return 0
             
     def enable(self):
-        """Manually enable (admin only)."""
+        """Manually enable (admin only).
+        
+        Raises NotImplementedError if privacy review has not been completed.
+        """
+        if not PRIVACY_GUARD_ENABLED:
+            raise NotImplementedError(
+                'Privacy review required before enabling federated intelligence. '
+                'Set PRIVACY_GUARD_ENABLED = True after completing privacy review.'
+            )
         self._enabled = True
         
     def disable(self):

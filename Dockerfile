@@ -59,8 +59,8 @@ RUN pip install --no-cache-dir --break-system-packages \
     google-auth-httplib2==0.2.0 \
     msal==1.28.0 \
     pywebpush==1.14.0 \
-    numpy==1.26.4
-
+    numpy==1.26.4 \
+    gremlinpython==3.7.1
 # Set ownership
 RUN chown -R lipaira:lipaira /opt/lipaira
 
