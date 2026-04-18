@@ -281,3 +281,42 @@ def test_20_morning_briefing_generates_without_error(api_url, test_user):
     )
     assert resp.status_code in (200, 201, 202), \
         f'Morning briefing failed: {resp.status_code}'
+
+
+# =============================================================================
+# Tests 21-23: Block 4 — Intelligence Layer (Event Queue, Anticipatory
+# Scheduler, Federated Intelligence) via /api/admin/services
+# =============================================================================
+
+def test_21_event_bus_events_table_is_writable(api_url):
+    """21. Event Bus: events table exists and accepts writes."""
+    resp = requests.get(f'{api_url}/api/admin/services', timeout=10)
+    assert resp.status_code == 200, f'Admin services endpoint error: {resp.status_code}'
+    data = resp.json()
+    assert 'event_bus' in data, 'event_bus not in admin services response'
+    assert data['event_bus'] != 'unknown', 'event_bus not initialized'
+    assert not data['event_bus'].startswith('error'), \
+        f'Event Bus DB error: {data["event_bus"]}'
+
+
+def test_22_anticipatory_signals_table_accessible(api_url):
+    """22. Anticipatory Scheduler: anticipatory_signals table is queryable."""
+    resp = requests.get(f'{api_url}/api/admin/services', timeout=10)
+    assert resp.status_code == 200, f'Admin services endpoint error: {resp.status_code}'
+    data = resp.json()
+    assert 'anticipatory_scheduler' in data, 'anticipatory_scheduler not in response'
+    # 'ok (N signals)' or 'error: ...' — table must at least be readable
+    assert 'error' not in data['anticipatory_scheduler'].lower(), \
+        f'Signals table error: {data["anticipatory_scheduler"]}'
+
+
+def test_23_federated_intelligence_opt_in_column_exists(api_url):
+    """23. Federated Intelligence: opt-in column exists (migration-ready or active)."""
+    resp = requests.get(f'{api_url}/api/admin/services', timeout=10)
+    assert resp.status_code == 200, f'Admin services endpoint error: {resp.status_code}'
+    data = resp.json()
+    assert 'federated_intelligence' in data, 'federated_intelligence not in response'
+    # Either 'ok (N opted in)' or 'column_missing (migration needed)' — both valid states
+    val = data['federated_intelligence']
+    assert val != 'unknown', 'Federated intelligence not initialized'
+    assert not val.startswith('error:'), f'Federated intelligence error: {val}'

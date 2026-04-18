@@ -37,7 +37,7 @@ jobs:
           PASS_COUNT=$(grep -c 'PASSED' test_results.txt || echo 0)
           FAIL_COUNT=$(grep -c 'FAILED' test_results.txt || echo 0)
           SKIP_COUNT=$(grep -c 'SKIPPED' test_results.txt || echo 0)
-          TOTAL=20
+          TOTAL=23
           PASS_RATE=$(python3 -c "print(round(($PASS_COUNT)/$TOTAL, 2))")
           echo "RESULTS: $PASS_COUNT passed, $FAIL_COUNT failed, $SKIP_COUNT skipped out of $TOTAL"
           echo "PASS_RATE=$PASS_RATE" >> $GITHUB_ENV
