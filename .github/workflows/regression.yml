@@ -1,0 +1,55 @@
+name: Regression Suite
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'API URL to test'
+        required: false
+        default: 'http://localhost:8080'
+        type: string
+  repository_dispatch:
+    types: [deploy-success]
+
+env:
+  DEPLOYED_API_URL: ${{ vars.LIPAIRA_API_URL || 'http://localhost:8080' }}
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pytest requests
+
+      - name: Run regression tests
+        run: |
+          pip install pytest requests
+          pytest tests/regression/ -v --tb=short 2>&1 | tee test_results.txt
+          # Count results
+          PASS_COUNT=$(grep -c 'PASSED' test_results.txt || echo 0)
+          FAIL_COUNT=$(grep -c 'FAILED' test_results.txt || echo 0)
+          SKIP_COUNT=$(grep -c 'SKIPPED' test_results.txt || echo 0)
+          TOTAL=20
+          PASS_RATE=$(python3 -c "print(round(($PASS_COUNT)/$TOTAL, 2))")
+          echo "RESULTS: $PASS_COUNT passed, $FAIL_COUNT failed, $SKIP_COUNT skipped out of $TOTAL"
+          echo "PASS_RATE=$PASS_RATE" >> $GITHUB_ENV
+          echo "FAIL_COUNT=$FAIL_COUNT" >> $GITHUB_ENV
+          if [ "$FAIL_COUNT" -gt 2 ]; then
+            echo "BLOCKING DEPLOY: $FAIL_COUNT failures (pass rate $PASS_RATE < 0.9)"
+            exit 1
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-results
+          path: test_results.txt
