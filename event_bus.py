@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timedelta
 from queue import Queue, Empty
 from typing import Dict, Any, Callable, Optional
+from concurrent.futures import ThreadPoolExecutor, Future
 import psycopg2
 from urllib.parse import urlparse
 
@@ -26,7 +27,7 @@ class EventBus:
         self.db_url = db_url or os.environ.get('DATABASE_URL')
         self._handlers: Dict[str, Callable] = {}
         self._queue: Queue = Queue()
-        self._worker_thread: Optional[threading.Thread] = None
+        self._executor: Optional[ThreadPoolExecutor] = None
         self._running = False
         
     def register_handler(self, event_type: str, handler: Callable):
@@ -65,34 +66,39 @@ class EventBus:
         return True
         
     def start(self):
-        """Start the event worker thread."""
+        """Start the thread pool executor."""
         if self._running:
             return
         self._running = True
-        self._worker_thread = threading.Thread(target=self._worker, daemon=True)
-        self._worker_thread.start()
-        print("EventBus started")
+        self._executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_HANDLERS, thread_name_prefix='event_worker')
+        # Start the queue consumer
+        self._consumer_thread = threading.Thread(target=self._consumer, daemon=True)
+        self._consumer_thread.start()
+        print(f"EventBus started with ThreadPoolExecutor(max_workers={MAX_CONCURRENT_HANDLERS})")
         
     def stop(self):
-        """Stop the event worker thread."""
+        """Stop the event bus."""
         self._running = False
-        if self._worker_thread:
-            self._worker_thread.join(timeout=5)
+        if self._executor:
+            self._executor.shutdown(wait=True)
+        if hasattr(self, '_consumer_thread'):
+            self._consumer_thread.join(timeout=5)
         print("EventBus stopped")
         
-    def _worker(self):
-        """Worker thread that processes events from the queue."""
+    def _consumer(self):
+        """Consumer thread that pulls events from queue and dispatches to thread pool."""
         while self._running:
             try:
                 event = self._queue.get(timeout=1)
-                self._process_event(event)
+                if self._executor:
+                    self._executor.submit(self._process_event, event)
             except Empty:
                 continue
             except Exception as e:
-                print(f"Worker error: {e}")
+                print(f"Consumer error: {e}")
                 
     def _process_event(self, event: Dict[str, Any]):
-        """Process a single event."""
+        """Process a single event (runs in thread pool)."""
         event_type = event.get('event_type')
         user_id = event.get('user_id')
         payload = event.get('payload', {})
@@ -177,9 +183,32 @@ def get_event_bus() -> EventBus:
     if _event_bus is None:
         _event_bus = EventBus()
         _event_bus.start()
+        # Register default handler stubs for each event type
+        _register_default_handlers(_event_bus)
         # Replay pending events on startup
         _event_bus.replay_pending()
     return _event_bus
+
+def _register_default_handlers(bus: EventBus):
+    """Register empty handler stubs for all defined event types."""
+    event_types = [
+        'invoice_overdue',
+        'invoice_paid', 
+        'email_received',
+        'calendar_conflict',
+        'deal_quiet',
+        'payment_received',
+        'contract_expiring',
+        'pattern_threshold_hit'
+    ]
+    for evt_type in event_types:
+        bus.register_handler(evt_type, _make_stub_handler(evt_type))
+
+def _make_stub_handler(event_type: str):
+    """Create a stub handler that logs the event."""
+    def stub_handler(user_id: str, payload: Dict[str, Any]):
+        print(f"Handler called for {event_type} (user_id={user_id})")
+    return stub_handler
 
 def emit_event(event_type: str, user_id: str, payload: Dict[str, Any]) -> bool:
     """Convenience function to emit events."""
