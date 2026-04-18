@@ -184,15 +184,16 @@ class AnticipatoryScheduler:
             
         cursor.execute("""
             INSERT INTO anticipatory_signals 
-            (user_id, signal_type, urgency, title, description, action_suggested, status)
-            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+            (user_id, signal_type, urgency, title, description, action_suggested, metadata, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')
         """, (
             user_id, 
             signal['signal_type'],
             signal['urgency'],
             signal['title'],
             signal['description'],
-            signal['action_suggested']
+            signal['action_suggested'],
+            json.dumps(signal.get('metadata', {}))
         ))
         
         conn.commit()
