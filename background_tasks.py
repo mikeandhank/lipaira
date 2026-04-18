@@ -262,6 +262,41 @@ def _execute_workflow_inline(workflow_id, steps, user_id):
     )
 
 
+def _run_audit_replay_loop():
+    """Replay buffered fallback audit logs to DB every 5 minutes."""
+    while True:
+        time.sleep(300)  # Check every 5 minutes
+        
+        try:
+            from audit_log import replay_fallback_logs_to_db
+            count = replay_fallback_logs_to_db()
+            if count > 0:
+                logger.info(f"Audit replay: {count} events restored to DB")
+        except Exception as e:
+            logger.error(f"Audit replay error: {e}")
+
+
+def _run_audit_rotation_loop():
+    """Rotate old audit logs daily (delete files older than 90 days)."""
+    while True:
+        now = datetime.now(timezone.utc)
+        next_midnight = now.replace(hour=0, minute=1, second=0, microsecond=0)
+        if next_midnight <= now:
+            next_midnight += timedelta(days=1)
+        
+        sleep_seconds = (next_midnight - now).total_seconds()
+        logger.info(f"Next audit log rotation in {sleep_seconds/3600:.1f} hours")
+        time.sleep(sleep_seconds)
+        
+        try:
+            from audit_log import rotate_old_logs
+            count = rotate_old_logs()
+            if count > 0:
+                logger.info(f"Audit rotation: deleted {count} old log files")
+        except Exception as e:
+            logger.error(f"Audit rotation error: {e}")
+
+
 def start_background_tasks():
     """Start all background maintenance threads."""
     # Start billing sweep
@@ -282,6 +317,20 @@ def start_background_tasks():
     threading.Thread(
         target=_run_workflow_scheduler_loop,
         name="workflow-scheduler",
+        daemon=True
+    ).start()
+
+    # Start audit replay (restores buffered events to DB)
+    threading.Thread(
+        target=_run_audit_replay_loop,
+        name="audit-replay",
+        daemon=True
+    ).start()
+
+    # Start audit rotation (deletes logs older than 90 days)
+    threading.Thread(
+        target=_run_audit_rotation_loop,
+        name="audit-rotation",
         daemon=True
     ).start()
 

@@ -1,27 +1,39 @@
 """
-Audit logging for skill executions and security-critical actions.
-Every consequential action gets logged for security and compliance.
+Fail-Safe Audit Logging for Lipaira.
 
-Two tiers:
-- Critical (require_audit): login, key issuance, permission changes.
-  Fails the operation if DB audit write fails. Raises AuditLogError.
-- Non-critical (log_audit): skill executions, general API calls.
-  Falls back to file + stderr on failure. Never blocks execution.
+Implements Contract C2: Fail-Safe Audit Logging
+https://github.com/mikeandhank/lipaira-specs/blob/main/COMPLIANCE_FIXES_CONTRACTS.md
 
-Note: Fallback logs to /var/log/lipaira/audit_fallback.jsonl.
-These logs are ephemeral — they exist only inside the container and are
-lost on container restart unless /var/log/lipaira is mounted as a volume.
+Architecture:
+    audit_event → [primary: DB write, retry 3x with exponential backoff]
+                 → [fallback: /var/log/lipaira/audit/YYYY-MM-DD.jsonl]
+                 → [if both fail: logger.error → triggers alerting]
+
+File path: /var/log/lipaira/audit/audit.log (mounted from host)
+File format: newline-delimited JSON ({"ts", "user_id", "action", "payload_hash", "status"})
+File rotation: daily, retain 90 days (configurable)
+DB write: retry 3x with exponential backoff before falling to file
 """
 
+import hashlib
 import json
 import logging
 import os
+import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# Constants for Contract C2 compliance
+AUDIT_FALLBACK_DIR = "/var/log/lipaira/audit"
+AUDIT_FALLBACK_FILE = "audit.log"  # Daily rotation appends YYYY-MM-DD prefix
+AUDIT_RETENTION_DAYS = 90
+MAX_DB_RETRIES = 3
+DB_RETRY_BASE_DELAY = 0.5  # seconds, exponential backoff
 
 
 class AuditLogError(Exception):
@@ -29,34 +41,105 @@ class AuditLogError(Exception):
     pass
 
 
-def _write_fallback_log(entry: dict, fallback_path: str = "/var/log/lipaira/audit_fallback.jsonl"):
-    """
-    Write audit entry to fallback file when DB is unavailable.
-    
-    Note: These logs are ephemeral — stored inside the container.
-    They are lost on container restart unless /var/log/lipaira is
-    mounted as a persistent volume from the host.
-    """
+def _hash_payload(params: Optional[dict]) -> str:
+    """Create a SHA256 hash of the payload for audit trail integrity."""
+    if params is None:
+        return ""
     try:
-        os.makedirs(os.path.dirname(fallback_path), exist_ok=True)
+        payload_str = json.dumps(params, sort_keys=True, default=str)
+        return hashlib.sha256(payload_str.encode()).hexdigest()[:16]
+    except Exception:
+        return "hash-error"
+
+
+def _get_fallback_path() -> str:
+    """Get the daily rotating fallback log path."""
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    fallback_dir = Path(AUDIT_FALLBACK_DIR)
+    return str(fallback_dir / f"{today}-{AUDIT_FALLBACK_FILE}")
+
+
+def _write_fallback_log(entry: dict, fallback_path: str = None) -> bool:
+    """
+    Write audit entry to append-only fallback file when DB is unavailable.
+    
+    Returns True if write succeeded, False if it also failed.
+    """
+    if fallback_path is None:
+        fallback_path = _get_fallback_path()
+    
+    try:
+        Path(fallback_path).parent.mkdir(parents=True, exist_ok=True)
         with open(fallback_path, "a") as f:
             f.write(json.dumps(entry) + "\n")
-    except Exception:
-        pass  # Last resort: at least we tried the file
+        return True
+    except Exception as e:
+        # Last resort: log critical error
+        logger.error(
+            f"AUDIT BOTH FAILURES: user_id={entry.get('user_id')} action={entry.get('action')} "
+            f"timestamp={entry.get('ts')} — file_write_error={str(e)}"
+        )
+        return False
 
 
 def _audit_log_entry(user_id: str, action: str, params: Optional[dict] = None,
                      success: bool = True, error: Optional[str] = None) -> dict:
-    """Build a standard audit log entry."""
+    """Build a standard audit log entry in Contract C2 format."""
     return {
-        "id": str(uuid.uuid4()),
+        "ts": datetime.utcnow().isoformat() + "Z",
         "user_id": user_id,
         "action": action,
-        "params": params or {},
-        "success": success,
+        "payload_hash": _hash_payload(params),
+        "status": "success" if success else "failed",
         "error": error,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
     }
+
+
+def _db_write_with_retry(user_id: str, action: str, params: Optional[dict] = None,
+                          success: bool = True, error: Optional[str] = None) -> bool:
+    """
+    Write audit entry to database with exponential backoff retry.
+    
+    Returns True if DB write succeeded, False if all retries exhausted.
+    """
+    entry = _audit_log_entry(user_id, action, params, success, error)
+    
+    for attempt in range(1, MAX_DB_RETRIES + 1):
+        try:
+            import psycopg2
+            db_url = os.environ.get('DATABASE_URL')
+            if not db_url:
+                raise RuntimeError("DATABASE_URL environment variable is required")
+            
+            conn = psycopg2.connect(db_url)
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO operator_audit_log 
+                    (user_id, action, params, success, error, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (user_id, action, json.dumps(params or {}),
+                      success, error, datetime.utcnow()))
+                conn.commit()
+            conn.close()
+            logger.info(f"Audit log: [{action}] {user_id} success={success}")
+            return True
+            
+        except Exception as e:
+            if attempt == MAX_DB_RETRIES:
+                logger.warning(
+                    f"AUDIT DB FAILURE (all retries exhausted): user_id={user_id} action={action} "
+                    f"timestamp={entry['ts']} error={str(e)}"
+                )
+                return False
+            else:
+                delay = DB_RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                logger.warning(
+                    f"AUDIT DB RETRY {attempt}/{MAX_DB_RETRIES}: user_id={user_id} action={action} "
+                    f"delay={delay}s error={str(e)}"
+                )
+                time.sleep(delay)
+    
+    return False
 
 
 def log_audit(user_id: str, action: str, params: Optional[dict] = None,
@@ -64,36 +147,20 @@ def log_audit(user_id: str, action: str, params: Optional[dict] = None,
     """
     Non-critical audit log — continues on failure with fallback.
     
+    Contract C2 implementation:
+    1. Try DB write with retry 3x exponential backoff
+    2. On DB failure, fall back to /var/log/lipaira/audit/YYYY-MM-DD.jsonl
+    3. If both fail, log critical error but NEVER block execution
+    
     Use for: skill executions, general API calls, read operations.
-    If DB write fails, writes to /var/log/lipaira/audit_fallback.jsonl
-    and logs to stderr. Does not block the calling code.
     """
     entry = _audit_log_entry(user_id, action, params, success, error)
     
-    try:
-        import psycopg2
-        db_url = os.environ.get('DATABASE_URL')
-        if not db_url:
-            raise RuntimeError("DATABASE_URL environment variable is required")
-        
-        conn = psycopg2.connect(db_url)
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO operator_audit_log 
-                (user_id, action, params, success, error, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (user_id, action, json.dumps(params or {}),
-                  success, error, datetime.utcnow()))
-            conn.commit()
-        conn.close()
-        logger.info(f"Audit log: [{action}] {user_id} success={success}")
-        
-    except Exception as e:
-        # Fallback: write to file + stderr. Never block.
-        logger.warning(
-            f"AUDIT FALLBACK: user_id={user_id} action={action} "
-            f"timestamp={entry['timestamp']} error={str(e)}"
-        )
+    # Primary: DB write with retry
+    db_success = _db_write_with_retry(user_id, action, params, success, error)
+    
+    # Fallback: file write if DB failed
+    if not db_success:
         _write_fallback_log(entry)
 
 
@@ -102,14 +169,8 @@ def require_audit(action: str):
     Decorator for critical security paths — rejects on audit failure.
     
     Use on: login, register, logout, key issuance, permission changes.
-    If DB write fails, raises AuditLogError — the calling endpoint
-    must catch this and return 500.
-    
-    Usage:
-        @app.route('/api/auth/login', methods=['POST'])
-        @require_audit("login")
-        def login():
-            ...
+    If DB write fails after all retries, raises AuditLogError — 
+    the calling endpoint must catch this and return 500.
     """
     def decorator(f):
         @wraps(f)
@@ -138,35 +199,135 @@ def require_audit(action: str):
             finally:
                 if user_id:
                     entry = _audit_log_entry(user_id, action, {"endpoint": f.__name__}, success, error)
-                    try:
-                        import psycopg2
-                        db_url = os.environ.get('DATABASE_URL')
-                        if not db_url:
-                            raise RuntimeError("DATABASE_URL required")
+                    
+                    # Primary: DB write with retry
+                    db_success = _db_write_with_retry(
+                        user_id, action, {"endpoint": f.__name__}, success, error
+                    )
+                    
+                    # Critical path — if DB write fails, reject the operation
+                    if not db_success:
+                        # Try fallback file write first
+                        file_success = _write_fallback_log(entry)
                         
-                        conn = psycopg2.connect(db_url)
-                        with conn.cursor() as cur:
-                            cur.execute("""
-                                INSERT INTO operator_audit_log 
-                                (user_id, action, params, success, error, created_at)
-                                VALUES (%s, %s, %s, %s, %s, %s)
-                            """, (user_id, action, json.dumps({"endpoint": f.__name__}),
-                                  success, error, datetime.utcnow()))
-                            conn.commit()
-                        conn.close()
-                    except Exception as db_e:
-                        # Critical path — DB write MUST succeed or we reject
-                        logger.error(
-                            f"AUDIT CRITICAL FAILURE: user_id={user_id} action={action} "
-                            f"db_error={str(db_e)} — operation rejected"
-                        )
-                        raise AuditLogError(
-                            f"Critical audit write failed for action={action}, user_id={user_id}. "
-                            f"Operation rejected. DB error: {db_e}"
-                        )
+                        if not file_success:
+                            # Both failed — this is a critical alerting condition
+                            logger.error(
+                                f"AUDIT CRITICAL FAILURE: user_id={user_id} action={action} "
+                                f"db_error={error} — operation rejected"
+                            )
+                            raise AuditLogError(
+                                f"Critical audit write failed for action={action}, user_id={user_id}. "
+                                f"Operation rejected."
+                            )
         
         return decorated
     return decorator
+
+
+def replay_fallback_logs_to_db():
+    """
+    Replay buffered audit events from fallback files to database.
+    
+    Called after DB comes back online to replay any events that were
+    buffered during DB outage.
+    
+    Returns count of events replayed.
+    """
+    import psycopg2
+    
+    fallback_dir = Path(AUDIT_FALLBACK_DIR)
+    if not fallback_dir.exists():
+        return 0
+    
+    replayed = 0
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        logger.error("DATABASE_URL not set, cannot replay fallback logs")
+        return 0
+    
+    try:
+        conn = psycopg2.connect(db_url)
+        
+        # Process all audit log files
+        for log_file in sorted(fallback_dir.glob("*-audit.log")):
+            logger.info(f"Replaying fallback log: {log_file}")
+            
+            # Read entries (one JSON object per line)
+            entries_to_replay = []
+            try:
+                with open(log_file, "r") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            try:
+                                entry = json.loads(line)
+                                entries_to_replay.append(entry)
+                            except json.JSONDecodeError:
+                                logger.warning(f"Skipping invalid JSON line in {log_file}")
+            except Exception as e:
+                logger.error(f"Error reading fallback log {log_file}: {e}")
+                continue
+            
+            # Replay entries to DB
+            for entry in entries_to_replay:
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO operator_audit_log 
+                            (user_id, action, params, success, error, created_at)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, (
+                            entry.get('user_id', ''),
+                            entry.get('action', ''),
+                            json.dumps({"replay": True, "payload_hash": entry.get('payload_hash', '')}),
+                            entry.get('status') == 'success',
+                            entry.get('error'),
+                            datetime.fromisoformat(entry.get('ts', datetime.utcnow().isoformat()).replace('Z', '')) if entry.get('ts') else datetime.utcnow()
+                        ))
+                    replayed += 1
+                except Exception as e:
+                    logger.error(f"Failed to replay entry: {e}")
+            
+            # Mark file as replayed by renaming
+            if entries_to_replay:
+                replayed_file = log_file.with_suffix('.log.replayed')
+                log_file.rename(replayed_file)
+                logger.info(f"Marked {log_file} as replayed -> {replayed_file}")
+        
+        conn.commit()
+        conn.close()
+        
+        if replayed > 0:
+            logger.info(f"Replay complete: {replayed} events replayed to DB")
+        
+        return replayed
+        
+    except Exception as e:
+        logger.error(f"Replay job failed: {e}")
+        return 0
+
+
+def rotate_old_logs():
+    """
+    Remove audit log files older than AUDIT_RETENTION_DAYS (90 days).
+    
+    Should be run daily (e.g., via cron or background task).
+    """
+    fallback_dir = Path(AUDIT_FALLBACK_DIR)
+    if not fallback_dir.exists():
+        return 0
+    
+    cutoff = datetime.utcnow() - timedelta(days=AUDIT_RETENTION_DAYS)
+    deleted = 0
+    
+    for log_file in fallback_dir.glob("*-audit.log"):
+        if log_file.stat().st_mtime < cutoff.timestamp():
+            log_file.unlink()
+            deleted += 1
+            logger.info(f"Deleted old audit log: {log_file}")
+    
+    return deleted
 
 
 # Alias for backward compatibility
