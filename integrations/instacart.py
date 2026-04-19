@@ -11,12 +11,12 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-class InstacartAPI:
+class InstacartAdapter:
     """
     Instacart API wrapper for grocery shopping operations.
     
     Usage:
-        api = InstacartAPI(auth_token="your_token")
+        api = InstacartAdapter(auth_token="your_token")
         results = api.search("organic milk")
         cart_item = api.add_to_cart(product_id="12345", quantity=2)
         checkout = api.checkout(cart_id="cart_123", payment_method="credit_card")

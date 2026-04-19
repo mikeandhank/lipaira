@@ -12,6 +12,7 @@ Unified interface for external service integrations:
 from .credential_store import IntegrationCredentialStore, get_supported_providers
 from .network_handler import NetworkHandler, RateLimiter, IdempotencyManager, get_network_handler, get_rate_limiter
 from .godaddy import GoDaddyAdapter, get_adapter
+from .instacart import InstacartAdapter
 
 __all__ = [
     # Credential management
@@ -28,6 +29,7 @@ __all__ = [
     # Adapters
     'GoDaddyAdapter',
     'get_adapter',
+    'InstacartAdapter',
 ]
 
 # Provider configuration
@@ -61,5 +63,11 @@ PROVIDERS = {
         'type': 'registrar',
         'description': 'Domain Registration and DNS',
         'auth_method': 'api_key',
+    },
+    'instacart': {
+        'name': 'Instacart',
+        'type': 'shopping',
+        'description': 'Grocery delivery and pickup',
+        'auth_method': 'access_token',
     },
 }
