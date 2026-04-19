@@ -13,6 +13,7 @@ from .credential_store import IntegrationCredentialStore, get_supported_provider
 from .network_handler import NetworkHandler, RateLimiter, IdempotencyManager, get_network_handler, get_rate_limiter
 from .godaddy import GoDaddyAdapter, get_adapter
 from .instacart import InstacartAdapter
+from .opentable import OpenTableAdapter
 
 __all__ = [
     # Credential management
@@ -30,6 +31,7 @@ __all__ = [
     'GoDaddyAdapter',
     'get_adapter',
     'InstacartAdapter',
+    'OpenTableAdapter',
 ]
 
 # Provider configuration
@@ -68,6 +70,12 @@ PROVIDERS = {
         'name': 'Instacart',
         'type': 'shopping',
         'description': 'Grocery delivery and pickup',
+        'auth_method': 'access_token',
+    },
+    'opentable': {
+        'name': 'OpenTable',
+        'type': 'restaurant',
+        'description': 'Restaurant reservations and dining',
         'auth_method': 'access_token',
     },
 }
