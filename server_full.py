@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 from psycopg2.extras import RealDictCursor
 from psycopg2.extras import RealDictCursor
 from functools import wraps
-from flask import Flask, request, jsonify, g, redirect, session
+from flask import Flask, Request, request, jsonify, g, redirect, session
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -5541,3 +5541,15 @@ def log_activity():
     
     return jsonify({'success': True})
 
+
+# ============================================================================
+# GENERIC WEBHOOK ENDPOINTS
+# ============================================================================
+
+@app.post("/webhooks/{provider}")
+async def webhook_receive(provider: str, request: Request):
+    return {"status": "received", "provider": provider}
+
+@app.get("/webhooks/health")
+async def webhook_health():
+    return {"status": "healthy"}
