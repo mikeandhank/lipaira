@@ -87,6 +87,13 @@ try:
 except Exception as e:
  logger.warning(f"Failed to load Slack skills: {e}")
 
+# === Slack Skill (lipaira_client) ===
+try:
+    from lipaira_client.skills import slack_skill
+    skill_registry.register(slack_skill)
+except Exception as e:
+    logger.warning(f"Failed to load lipaira_client slack_skill: {e}")
+
 # === Discord Skill ===
 try:
  from skills.discord import DiscordSendSkill
@@ -174,36 +181,26 @@ except Exception as e:
 
 # === Asana Skills ===
 try:
-    from skills.asana.tasks import AsanaGetTasksSkill, AsanaCreateTaskSkill
-    skill_registry.register(AsanaGetTasksSkill)
-    skill_registry.register(AsanaCreateTaskSkill)
+ from skills.asana.tasks import AsanaGetTasksSkill, AsanaCreateTaskSkill
+ skill_registry.register(AsanaGetTasksSkill)
+ skill_registry.register(AsanaCreateTaskSkill)
 except Exception as e:
-    logger.warning(f"Failed to load Asana skills: {e}")
+ logger.warning(f"Failed to load Asana skills: {e}")
 
 # === Microsoft Skills ===
 try:
-    from skills.microsoft import (
-        OutlookSendSkill,
-        OutlookReadSkill,
-        OutlookCalendarReadSkill,
-        OutlookCalendarWriteSkill,
-        OneDriveUploadSkill,
-        WordCreateSkill,
-        ExcelCreateSkill,
-        OneNoteCreateSkill,
-        OutlookContactLookupSkill,
-    )
-    skill_registry.register(OutlookSendSkill)
-    skill_registry.register(OutlookReadSkill)
-    skill_registry.register(OutlookCalendarReadSkill)
-    skill_registry.register(OutlookCalendarWriteSkill)
-    skill_registry.register(OneDriveUploadSkill)
-    skill_registry.register(WordCreateSkill)
-    skill_registry.register(ExcelCreateSkill)
-    skill_registry.register(OneNoteCreateSkill)
-    skill_registry.register(OutlookContactLookupSkill)
+ from skills.microsoft import OutlookSendSkill, OutlookReadSkill, OutlookCalendarReadSkill, OutlookCalendarWriteSkill, OneDriveUploadSkill, WordCreateSkill, ExcelCreateSkill, OneNoteCreateSkill, OutlookContactLookupSkill
+ skill_registry.register(OutlookSendSkill)
+ skill_registry.register(OutlookReadSkill)
+ skill_registry.register(OutlookCalendarReadSkill)
+ skill_registry.register(OutlookCalendarWriteSkill)
+ skill_registry.register(OneDriveUploadSkill)
+ skill_registry.register(WordCreateSkill)
+ skill_registry.register(ExcelCreateSkill)
+ skill_registry.register(OneNoteCreateSkill)
+ skill_registry.register(OutlookContactLookupSkill)
 except Exception as e:
-    logger.warning(f"Failed to load Microsoft skills: {e}")
+ logger.warning(f"Failed to load Microsoft skills: {e}")
 
 logger.info(f"Skill registry initialized: {len(skill_registry.list())} skills registered")
 
