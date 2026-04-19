@@ -30,14 +30,9 @@ except ImportError:
         return base64.b64decode(encrypted.encode()).decode()
     
     def get_encryption_key():
-        key = os.environ.get('ENCRYPTION_KEY')
+        key = os.environ['ENCRYPTION_KEY']
         if not key:
-            env = os.environ.get('NEXUSOS_ENV', 'development')
-            if env == 'production':
-                raise ValueError("ENCRYPTION_KEY environment variable is required in production")
-            import warnings
-            warnings.warn("Using insecure dev key fallback — set ENCRYPTION_KEY for production")
-            key = 'dev-key-do-not-use-in-prod'
+            raise ValueError('ENCRYPTION_KEY environment variable is required')
         return key
 
 
@@ -119,10 +114,10 @@ def get_db_connection():
         )
     else:
         conn = psycopg2.connect(
-            host=os.environ.get("POSTGRES_HOST", "localhost"),
-            database=os.environ.get("POSTGRES_DB", "nexusos"),
-            user=os.environ.get("POSTGRES_USER", "nexusos"),
-            password=os.environ.get("POSTGRES_PASSWORD", "")
+            host=os.environ["POSTGRES_HOST"],
+            database=os.environ["POSTGRES_DB"],
+            user=os.environ["POSTGRES_USER"],
+            password=os.environ["POSTGRES_PASSWORD"]
         )
     
     try:

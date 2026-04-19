@@ -10,7 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 def _get_db():
-    return os.environ.get('DATABASE_URL', 'postgresql://lipaira:***@localhost:5432/lipaira')
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        raise ValueError('DATABASE_URL environment variable is required')
+    return db_url
 
 
 def create_internal_routes(app):
