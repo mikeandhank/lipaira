@@ -31,7 +31,7 @@ from datetime import datetime, timedelta
 from psycopg2.extras import RealDictCursor
 from psycopg2.extras import RealDictCursor
 from functools import wraps
-from flask import Flask, request, jsonify, g, redirect, session
+from flask import Flask, Request, request, jsonify, g, redirect, session
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -41,6 +41,26 @@ CORS(app, origins=['https://lipaira.ai', 'https://api.lipaira.ai',
      supports_credentials=True)
 import requests
 import redis
+
+# Redis connection with fail-closed authentication
+def get_redis_client():
+    """Return a Redis client with enforced authentication."""
+    redis_url = os.environ.get('REDIS_URL', 'redis://lipaira-redis:6379')
+    # Ensure URL contains password
+    from urllib.parse import urlparse, urlunparse
+    parsed = urlparse(redis_url)
+    if not parsed.password:
+        # No password in URL, require REDIS_PASSWORD
+        password = os.environ['REDIS_PASSWORD']
+        if not password:
+            raise ValueError('REDIS_PASSWORD must be non-empty')
+        # Inject password into URL
+        netloc = f':{password}@{parsed.hostname}'
+        if parsed.port:
+            netloc += f':{parsed.port}'
+        redis_url = urlunparse(parsed._replace(netloc=netloc))
+    return redis.from_url(redis_url)
+
 import docker
 import stripe
 from stripe.checkout import Session as CheckoutSession
@@ -320,6 +340,87 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
+# ============================================================================
+# JWT HELPERS
+# ============================================================================
+
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', app.secret_key)
+JWT_ALGORITHM = 'HS256'
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+REFRESH_TOKEN_EXPIRE_DAYS = 30
+
+def create_jwt_token(user_id: str, email: str, role: str, expires_delta: timedelta = None) -> str:
+    """Create a JWT token with user claims."""
+    try:
+        import jwt
+    except ImportError:
+        logger.warning("PyJWT not installed, JWT tokens disabled")
+        return None
+    
+    to_encode = {
+        "sub": user_id,
+        "email": email,
+        "role": role,
+        "type": "access"
+    }
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+    
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+def create_refresh_token(user_id: str) -> str:
+    """Create a refresh token (long-lived)."""
+    try:
+        import jwt
+    except ImportError:
+        logger.warning("PyJWT not installed, JWT tokens disabled")
+        return None
+    
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode = {
+        "sub": user_id,
+        "type": "refresh",
+        "exp": expire,
+        "iat": datetime.utcnow()
+    }
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+def verify_jwt_token(token: str) -> dict:
+    """Verify and decode JWT token. Returns payload if valid, None otherwise."""
+    try:
+        import jwt
+    except ImportError:
+        logger.warning("PyJWT not installed, JWT verification disabled")
+        return None
+    
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        logger.debug("JWT token expired")
+        return None
+    except jwt.InvalidTokenError as e:
+        logger.debug(f"Invalid JWT token: {e}")
+        return None
+
+def get_current_user_from_token(token: str) -> dict:
+    """Extract user info from valid JWT token. Returns user dict or None."""
+    payload = verify_jwt_token(token)
+    if not payload or payload.get("type") != "access":
+        return None
+    return {
+        "user_id": payload.get("sub"),
+        "email": payload.get("email"),
+        "role": payload.get("role")
+    }
+
+
+# ============================================================================
 # Model configuration by quality level
 QUALITY_MODELS = {
     QualityLevel.SPEED: {
@@ -996,28 +1097,72 @@ class UsageTracker:
 # ============================================================================
 
 def require_auth(f):
-    """Decorator for API Key authentication."""
+    """Decorator for authentication via JWT tokens or API keys."""
     @wraps(f)
     def decorated(*args, **kwargs):
         # Support both X-Lipaira-Key, Authorization: Bearer, and query param 'key'
         auth_header = request.headers.get('Authorization', '')
         if auth_header.startswith('Bearer '):
-            api_key = auth_header[7:]
+            token = auth_header[7:]
         else:
-            api_key = request.headers.get('X-Lipaira-Key') or request.args.get('api_key') or request.args.get('key')
+            token = request.headers.get('X-Lipaira-Key') or request.args.get('api_key') or request.args.get('key')
         
-        if not api_key:
-            return jsonify({'error': 'Missing API key (use X-Lipaira-Key or Authorization: Bearer)'}), 401
+        if not token:
+            return jsonify({'error': 'Missing authentication token (use X-Lipaira-Key or Authorization: Bearer)'}), 401
         
-        # Validate key
+        # Try JWT authentication first
+        user_info = get_current_user_from_token(token)
+        if user_info:
+            # JWT token is valid, fetch user details from database
+            user_id = user_info.get('user_id')
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT id, email, credits, subscription_tier, role, is_active
+                    FROM users WHERE id = %s
+                """, (user_id,))
+                row = cursor.fetchone()
+                conn.close()
+                
+                if not row:
+                    return jsonify({'error': 'User not found'}), 401
+                
+                user_id, email, credits, tier, role, is_active = row
+                if not is_active:
+                    return jsonify({'error': 'Account is disabled'}), 403
+                
+                g.user_id = user_id
+                g.user_email = email
+                g.user_credits = float(credits)
+                g.user_tier = tier
+                g.user_role = role or 'user'
+                
+                # Check rate limit based on credit balance
+                current_limit = get_rate_limit(g.user_credits)
+                if not check_rate_limit(g.user_id, g.user_credits):
+                    return jsonify({
+                        'error': 'Rate limit exceeded',
+                        'your_limit': current_limit,
+                        'your_credits': g.user_credits,
+                        'purchase_credits': 'Add credits for higher limits'
+                    }), 429
+                
+                return f(*args, **kwargs)
+                
+            except Exception as e:
+                logger.error(f"Database error during JWT auth: {e}")
+                return jsonify({'error': 'Authentication failed'}), 401
+        
+        # Fallback to API key authentication
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
             
             # Support both hashed and unhashed keys for backward compatibility
             # Try both: hash of full key, hash of key without prefix, and raw key
-            key_hash = hashlib.sha256(api_key.encode()).hexdigest()
-            key_part = api_key.replace('sk-nexus-', '').replace('lp-', '')
+            key_hash = hashlib.sha256(token.encode()).hexdigest()
+            key_part = token.replace('sk-nexus-', '').replace('lp-', '')
             key_hash_part = hashlib.sha256(key_part.encode()).hexdigest()
             
             cursor.execute("""
@@ -1025,18 +1170,18 @@ def require_auth(f):
                 FROM api_keys ak
                 JOIN users u ON u.id = ak.user_id
                 WHERE (ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s OR ak.key_hash = %s) AND ak.is_active = true
-            """, (key_hash, key_hash_part, api_key, key_part))
+            """, (key_hash, key_hash_part, token, key_part))
             
             row = cursor.fetchone()
             
             if not row:
                 conn.close()
-                return jsonify({'error': 'Invalid API key'}), 401
+                return jsonify({'error': 'Invalid API key or JWT token'}), 401
             
             # Update last used - match any of the possible key formats
             cursor.execute(
                 "UPDATE api_keys SET last_used = %s WHERE (key_hash = %s OR key_hash = %s OR key_hash = %s OR key_hash = %s)",
-                (datetime.now().isoformat(), key_hash, key_hash_part, api_key, key_part)
+                (datetime.now().isoformat(), key_hash, key_hash_part, token, key_part)
             )
             conn.commit()
             conn.close()
@@ -1301,8 +1446,7 @@ def login():
     
     try:
         import redis
-        redis_url = os.environ.get('REDIS_URL', 'redis://lipaira-redis:6379')
-        r = redis.from_url(redis_url)
+        r = get_redis_client()
         attempts_key = f"login_attempts:{email}"
         attempts = r.get(attempts_key)
         if attempts and int(attempts) >= 5:
@@ -1418,9 +1562,16 @@ def login():
         
         conn.close()
         
+        # Generate JWT tokens
+        access_token = create_jwt_token(user_id, user_email, role)
+        refresh_token = create_refresh_token(user_id)
+        
         return jsonify({
             'user': user, 
             'api_key': api_key,
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'token_type': 'bearer',
             'email_verified': True,
             'role': role
         })
@@ -1439,6 +1590,91 @@ def login():
             return jsonify({'error': 'Service temporarily unavailable'}), 503
         logger.error(f"Login error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/auth/me', methods=['GET'])
+@require_auth
+def get_current_user_profile():
+    """Get current user profile."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, email, name, credits, subscription_tier, role, email_verified, phone_verified
+            FROM users WHERE id = %s
+        """, (g.user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return jsonify({'error': 'User not found'}), 404
+        
+        user_id, email, name, credits, tier, role, email_verified, phone_verified = row
+        
+        return jsonify({
+            'id': user_id,
+            'email': email,
+            'name': name,
+            'credits': float(credits),
+            'subscription_tier': tier,
+            'role': role or 'user',
+            'email_verified': bool(email_verified),
+            'phone_verified': bool(phone_verified)
+        })
+    except Exception as e:
+        logger.error(f"Error fetching user profile: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/auth/refresh', methods=['POST'])
+def refresh_token():
+    """Refresh access token using refresh token."""
+    data = request.get_json() or {}
+    refresh_token = data.get('refresh_token', '').strip()
+    
+    if not refresh_token:
+        return jsonify({'error': 'refresh_token is required'}), 400
+    
+    # Verify refresh token
+    payload = verify_jwt_token(refresh_token)
+    if not payload or payload.get('type') != 'refresh':
+        return jsonify({'error': 'Invalid or expired refresh token'}), 401
+    
+    user_id = payload.get('sub')
+    if not user_id:
+        return jsonify({'error': 'Invalid token payload'}), 401
+    
+    # Fetch user details
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, email, role, is_active FROM users WHERE id = %s
+        """, (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return jsonify({'error': 'User not found'}), 404
+        
+        user_id, email, role, is_active = row
+        if not is_active:
+            return jsonify({'error': 'Account is disabled'}), 403
+        
+        # Generate new access token
+        access_token = create_jwt_token(user_id, email, role)
+        # Optionally generate new refresh token (rotate)
+        new_refresh_token = create_refresh_token(user_id)
+        
+        return jsonify({
+            'access_token': access_token,
+            'refresh_token': new_refresh_token,
+            'token_type': 'bearer'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error refreshing token: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @app.route('/api/auth/verify-email', methods=['POST'])
@@ -1499,17 +1735,38 @@ def verify_email():
             UPDATE api_keys SET active = true WHERE user_id = %s AND active = false
         """, (user_id,))
         
-        # Get API key to return
+        # Get API key to return - generate new key and update hash
         cursor.execute("""
-            SELECT key_hash FROM api_keys WHERE user_id = %s AND active = true LIMIT 1
+            SELECT id FROM api_keys WHERE user_id = %s AND active = true LIMIT 1
         """, (user_id,))
         key_row = cursor.fetchone()
+        
+        if key_row:
+            api_key = f"lp-{secrets.token_urlsafe(32)}"
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+            cursor.execute("""
+                UPDATE api_keys SET key_hash = %s WHERE id = %s
+            """, (key_hash, key_row[0]))
+        else:
+            # Fallback: create new API key
+            api_key = f"lp-{secrets.token_urlsafe(32)}"
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+            cursor.execute("""
+                INSERT INTO api_keys (id, user_id, key_hash, name, active)
+                VALUES (%s, %s, %s, %s, true)
+            """, (str(uuid.uuid4()), user_id, key_hash, 'Default Key'))
+        
+        # Get user role for JWT
+        cursor.execute("SELECT role FROM users WHERE id = %s", (user_id,))
+        role_row = cursor.fetchone()
+        role = role_row[0] if role_row else 'user'
         
         conn.commit()
         conn.close()
         
-        # Return API key so user can proceed
-        api_key = f"lp-{secrets.token_urlsafe(32)}"
+        # Generate JWT tokens
+        access_token = create_jwt_token(user_id, email, role)
+        refresh_token = create_refresh_token(user_id)
         
         # Critical audit log — reject if this fails
         try:
@@ -1522,7 +1779,10 @@ def verify_email():
             'verified': True,
             'message': 'Email verified successfully',
             'user_id': user_id,
-            'api_key': api_key
+            'api_key': api_key,
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'token_type': 'bearer'
         })
         
     except AuditLogError:
@@ -5281,3 +5541,15 @@ def log_activity():
     
     return jsonify({'success': True})
 
+
+# ============================================================================
+# GENERIC WEBHOOK ENDPOINTS
+# ============================================================================
+
+@app.post("/webhooks/{provider}")
+async def webhook_receive(provider: str, request: Request):
+    return {"status": "received", "provider": provider}
+
+@app.get("/webhooks/health")
+async def webhook_health():
+    return {"status": "healthy"}

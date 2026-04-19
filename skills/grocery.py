@@ -3,12 +3,13 @@ import os
 import logging
 import json
 import requests
+from integrations.instacart import InstacartAPI
 
 logger = logging.getLogger(__name__)
 
 # Instacart API (or Kroger fallback)
-INSTACART_API_KEY = os.environ.get('INSTACART_API_KEY', '')
-KROGER_API_KEY = os.environ.get('KROGER_API_KEY', '')
+INSTACART_API_KEY = os.getenv('INSTACART_API_KEY', '')
+KROGER_API_KEY = os.getenv('KROGER_API_KEY', '')
 KROGER_BASE_URL = 'https://api.kroger.com/v1'
 
 
@@ -107,9 +108,49 @@ class GroceryOrderingSkill:
             items.append({'item': 'groceries', 'qty': 1, 'unit': 'bag'})
         
         return items
-    
+
+    def search_products(self, query: str) -> list:
+        """Search for products using Instacart API."""
+        if not INSTACART_API_KEY:
+            return []
+        client = InstacartAPI(auth_token=INSTACART_API_KEY)
+        results = client.search(query)
+        # Transform to our internal format
+        formatted = []
+        for product in results:
+            formatted.append({
+                'name': product.get('name', 'Unknown'),
+                'price': float(product.get('price', 0.0)),
+                'quantity': 1,
+                'unit': 'unit',
+                'product_id': product.get('id', '')
+            })
+        return formatted
+
     def _search_items(self, items: list) -> list:
-        """Search for items via Kroger API."""
+        """Search for items via Instacart (primary) or Kroger API (fallback)."""
+        # First try Instacart if API key available
+        if INSTACART_API_KEY:
+            results = []
+            for item in items:
+                products = self.search_products(item['item'])
+                if products:
+                    # Take first product match
+                    product = products[0]
+                    results.append({
+                        'name': product['name'],
+                        'price': product['price'],
+                        'quantity': item['qty'],
+                        'unit': item['unit'],
+                        'product_id': product.get('product_id', '')
+                    })
+                else:
+                    # No Instacart result for this item
+                    pass
+            if results:
+                return results
+            # If no results from Instacart, fall through to Kroger
+        # Kroger fallback
         if not os.getenv("KROGER_API_KEY"):
             return []  # Caller handles empty list as no results
 
@@ -119,7 +160,7 @@ class GroceryOrderingSkill:
                 {'name': i['item'], 'price': 5.99 * i['qty'], 'quantity': i['qty'], 'unit': i['unit']}
                 for i in items
             ]
-        
+
         results = []
         for item in items:
             try:
