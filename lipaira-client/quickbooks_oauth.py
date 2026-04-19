@@ -43,7 +43,7 @@ def get_qb_base():
 redis_client = redis.Redis(
     host=os.environ.get('REDIS_HOST', 'redis'),
     port=int(os.environ.get('REDIS_PORT', 6379)),
-    password=os.environ.get('REDIS_PASSWORD') or None,
+    password=os.environ['REDIS_PASSWORD'],
     decode_responses=True
 )
 
